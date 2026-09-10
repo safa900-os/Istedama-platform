@@ -30,6 +30,10 @@ const SERVICES = [
 const TRAILING = [
   { to: '/tenders', key: 'nav.tenders' },
   { to: '/news', key: 'nav.news' },
+  // Self-employment sits with the other things the programme talks about
+  // rather than inside the services menu: it is a route into the platform for
+  // a whole class of member, not one more service to buy.
+  { to: '/freelance', key: 'nav.freelance' },
   { to: '/contact', key: 'nav.contact' }
 ];
 

@@ -657,6 +657,48 @@ export const translations = {
     'fab.call': 'Call us',
     'fab.message': 'Send a message',
     'nav.enter': 'Enter',
+    'nav.freelance': 'Self-employment',
+
+    // ---------------------------------------------------- self-employment
+    'free.eyebrow': 'Self-employment',
+    'free.title': 'Self-employed businesses on Istedama',
+    'free.lead':
+      'A freelance card lets an individual practise a trade in their own name, without a commercial registration and without staff. Istedama opens the parts of the programme that fit that — partners, facilities, discounts and tenders — and is straight with you about the parts that do not.',
+    'free.cta': 'Register your activity',
+    'free.ask': 'Ask us first',
+
+    'free.openEyebrow': 'What is open to you',
+    'free.openTitle': 'Four things you can use from today',
+    'free.openLead':
+      'Each of these is already running on the platform. None of it depends on holding a commercial registration.',
+    'free.open': 'Open',
+
+    'free.b1t': 'The partner network',
+    'free.b1b': 'Legal, accounting, banking and technology partners, with the terms each publishes.',
+    'free.b2t': 'Halls and meeting rooms',
+    'free.b2b': 'Book a hall by the hour for a client meeting or a workshop.',
+    'free.b3t': 'Partner discounts',
+    'free.b3b': 'The offers partners extend to registered members.',
+    'free.b4t': 'Tenders',
+    'free.b4b': 'Published opportunities, including those a single practitioner can take on.',
+
+    'free.limitTitle': 'And what does not apply',
+    'free.limitBody':
+      'The Istedama score and the sustainability certificate are not open to you. They are calculated from Omanization, financial stability and in-country value — measures of a company with staff and accounts. A self-employed activity has neither, so the score would have nothing to measure. Your account will show it blank rather than pretend otherwise.',
+
+    'free.cardTitle': 'The freelance card itself',
+    'free.cardBody':
+      'The card is issued by the Ministry of Labour, not by Istedama. Which professions it covers, what it costs and how long it lasts are the Ministry’s rules and the Ministry changes them — so read them at the source rather than here.',
+    'free.cardLink': 'Ministry of Labour',
+
+    'free.stepsTitle': 'Joining, in three steps',
+    'free.s1t': 'Hold a valid card',
+    'free.s1b': 'Issued by the Ministry of Labour and still in date.',
+    'free.s2t': 'Register on Istedama',
+    'free.s2b': 'Your name, your activity, and the card number.',
+    'free.s3t': 'Use what is open',
+    'free.s3b': 'Partners, halls, discounts and tenders, as soon as the account is approved.',
+
     'nav.contact': 'Contact',
 
     // Home additions
@@ -1662,6 +1704,48 @@ export const translations = {
     'fab.call': 'اتصل بنا',
     'fab.message': 'أرسل رسالة',
     'nav.enter': 'دخول',
+    'nav.freelance': 'العمل الحر',
+
+    // ---------------------------------------------------- العمل الحر
+    'free.eyebrow': 'العمل الحر',
+    'free.title': 'مؤسسات العمل الحر في استدامة',
+    'free.lead':
+      'بطاقة العمل الحر تتيح للفرد مزاولة نشاطه باسمه، بلا سجل تجاري وبلا موظفين. تفتح استدامة ما يناسب ذلك من البرنامج — الشركاء والمرافق والخصومات والمناقصات — وتصارحك بما لا يناسبه.',
+    'free.cta': 'سجّل نشاطك',
+    'free.ask': 'اسألنا أولاً',
+
+    'free.openEyebrow': 'ما هو متاح لك',
+    'free.openTitle': 'أربعة أشياء تستفيد منها من اليوم',
+    'free.openLead':
+      'كلها تعمل على المنصة فعلاً، ولا يشترط فيها سجل تجاري.',
+    'free.open': 'ادخل',
+
+    'free.b1t': 'شبكة الشركاء',
+    'free.b1b': 'شركاء قانونيون ومحاسبون ومصارف وشركات تقنية، بشروط كل منهم المنشورة.',
+    'free.b2t': 'القاعات وغرف الاجتماعات',
+    'free.b2b': 'احجز قاعة بالساعة لاجتماع عميل أو ورشة عمل.',
+    'free.b3t': 'خصومات الشركاء',
+    'free.b3b': 'العروض التي يقدّمها الشركاء للمسجّلين في المنصة.',
+    'free.b4t': 'المناقصات',
+    'free.b4b': 'الفرص المنشورة، ومنها ما يقدر عليه ممارس واحد.',
+
+    'free.limitTitle': 'وما لا ينطبق عليك',
+    'free.limitBody':
+      'درجة استدامة وشهادة الاستدامة غير متاحة لك. فهي تُحسب من التعمين والاستقرار المالي والقيمة المحلية المضافة — وهي مقاييس منشأة لها موظفون وحسابات. ونشاط العمل الحر ليس فيه هذا ولا ذاك، فلن تجد الدرجة ما تقيسه. سيظهر حسابك بها فارغة، لا بأرقام موهومة.',
+
+    'free.cardTitle': 'بطاقة العمل الحر نفسها',
+    'free.cardBody':
+      'البطاقة تصدرها وزارة العمل لا استدامة. وما تشمله من مهن، وكلفتها، ومدّتها — كلها أنظمة الوزارة وهي تغيّرها. فاقرأها من مصدرها لا من هنا.',
+    'free.cardLink': 'وزارة العمل',
+
+    'free.stepsTitle': 'الانضمام في ثلاث خطوات',
+    'free.s1t': 'بطاقة سارية',
+    'free.s1b': 'صادرة من وزارة العمل وما زالت في مدّتها.',
+    'free.s2t': 'التسجيل في استدامة',
+    'free.s2b': 'اسمك، ونشاطك، ورقم البطاقة.',
+    'free.s3t': 'استخدم ما هو متاح',
+    'free.s3b': 'الشركاء والقاعات والخصومات والمناقصات، فور اعتماد الحساب.',
+
     'nav.contact': 'تواصل معنا',
 
     // إضافات الصفحة الرئيسية

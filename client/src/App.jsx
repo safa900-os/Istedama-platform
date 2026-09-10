@@ -19,6 +19,7 @@ import Partners from './pages/Partners';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import News from './pages/News';
+import Freelance from './pages/Freelance';
 import Services from './pages/Services';
 import Tenders from './pages/Tenders';
 import Facilities from './pages/Facilities';
@@ -64,6 +65,7 @@ export default function App() {
           <Route path="/discounts" element={<Discounts />} />
           <Route path="/advertise" element={<Advertise />} />
           <Route path="/news" element={<News />} />
+          <Route path="/freelance" element={<Freelance />} />
           <Route path="/services" element={<Services />} />
           <Route
             path="/dashboard"
