@@ -66,7 +66,9 @@ services:
   - type: web
     name: istidamah-client
     runtime: static
-    plan: free
+    # No `plan` here on purpose. A static site has no instance to size, so
+    # Render's schema has no plan for it and rejects the whole blueprint if one
+    # is given. Static sites are free and global by definition.
     rootDir: client
     buildCommand: npm ci && npm run build
     staticPublishPath: dist

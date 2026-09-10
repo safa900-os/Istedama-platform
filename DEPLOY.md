@@ -108,32 +108,46 @@ curl https://istidamah-api.onrender.com/api/health
 
 ---
 
-## ٤ · البيانات الأولى
+## ٤ · البيانات الأولى — من جهازك، لا من Render
 
-من لوحة Render، خدمة `istidamah-api` ← **Shell**:
+**لا تحتاج Shell.** ميزة Shell في Render تتطلّب خطة مدفوعة، والأهم أنك لا
+تحتاجها: قاعدة بياناتك على Atlas، وجهازك يصل إليها كما يصل خادم Render
+تماماً. الرابط في `server/.env` عندك هو نفسه الذي وضعتَه في لوحة Render —
+العنقود نفسه، والقاعدة نفسها (`istidamah`).
+
+فما تزرعه من جهازك يظهر على الموقع المنشور فوراً.
 
 ```bash
+cd C:\react\istidamah-platform6666\server
 npm run seed
 ```
 
-سيزرع الشركات والمرافق والمناقصات والأخبار، **ولن يزرع حسابات التجربة** —
-كلمات مرورها مكتوبة في `seed.js` وهو في المستودع، فزرعها على رابط عام
-يعني نشر مدخل مدير مفتوح للجميع.
+يزرع الشركات والمرافق والمناقصات والأخبار. **ولن يزرع حسابات التجربة** إن
+كان `NODE_ENV=production` في ملفك — وهو `development` محلياً، فستُزرع.
+لا بأس: هي في قاعدة بياناتك منذ البداية، والمهم أن الرابط العام لا ينشرها
+من تلقاء نفسه.
 
-فسجّل حسابك الأول من صفحة `/register` في الموقع، ثم ارفعه إلى `admin`
-من Shell بأمر واحد:
+### حسابك أنت
+
+سجّل من صفحة `/register` على الموقع المنشور، ثم من جهازك:
 
 ```bash
+cd C:\react\istidamah-platform6666\server
 npm run make-admin -- your@email.com
 ```
 
-الأمر لا يُنشئ حساباً ولا يضبط كلمة مرور — يغيّر دور من سجّل بنفسه فقط،
-فلا يمكن أن يترك خلفه مدخلاً لم تخترْه. وإن أخطأت البريد قال لك ذلك بدل
-أن يصمت.
+الأمر لا يُنشئ حساباً ولا يضبط كلمة مرور — يغيّر دور من سجّل بنفسه فقط.
 
-إن كان هذا عرضاً تجريبياً لا أكثر، ولا يهمّك من يدخله: اضبط
-`ALLOW_DEMO_ACCOUNTS=true` وأعد تشغيل `npm run seed` فتعود الحسابات
-الأربعة. **لا تفعل ذلك على نشر حقيقي.**
+### احذف حسابات التجربة قبل أن تعطي الرابط لأحد
+
+كلمات مرورها في المستودع، ومستودعك عام. من جهازك:
+
+```bash
+cd C:\react\istidamah-platform6666\server
+node -e "require('dotenv').config();const m=require('mongoose');const U=require('./src/models/User');m.connect(process.env.MONGO_URI).then(async()=>{const r=await U.deleteMany({email:{$in:['admin@istidamah.om','owner@istidamah.om','merchant@istidamah.om','auditor@istidamah.om']}});console.log('deleted',r.deletedCount);await m.disconnect()})"
+```
+
+نفّذه **بعد** أن ترفع حسابك إلى admin، وإلا بقيتَ بلا مدير.
 
 ---
 
