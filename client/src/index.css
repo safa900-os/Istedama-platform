@@ -1,0 +1,185 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: #F7F8FD;
+    background-image: linear-gradient(180deg, #FFFFFF 0%, #F7F8FD 50%, #EFF1FA 100%);
+    background-attachment: fixed;
+    color: #111834;
+  }
+
+  :focus-visible {
+    outline: 2px solid #223E98;
+    outline-offset: 3px;
+    border-radius: 8px;
+  }
+
+  ::selection { background: #FCF0E4; color: #223E98; }
+
+  /* Slim slate scrollbar — quiet against the white ground */
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-track { background: #EFF1FA; }
+  ::-webkit-scrollbar-thumb { background: #C3CBE6; border-radius: 99px; border: 3px solid #EFF1FA; }
+  ::-webkit-scrollbar-thumb:hover { background: #98A0BC; }
+}
+
+@layer components {
+  /* ---- surfaces ---------------------------------------------------- */
+  .card {
+    @apply rounded-2xl border border-rule bg-surface shadow-soft;
+  }
+  /* Generous interior spacing — the redesign trades density for breathing room */
+  .card-pad { @apply card p-7 sm:p-8; }
+
+  /* Large white content block the reference uses to hold whole sections */
+  .block-shell {
+    @apply rounded-4xl border border-white/70 bg-surface/80 shadow-soft backdrop-blur-sm;
+  }
+
+  /* ---- eyebrow: small orange dot + label, as on the reference ------- */
+  .eyebrow {
+    @apply inline-flex items-center gap-2 text-[13px] font-bold text-ink-muted;
+  }
+  .eyebrow::before {
+    content: '';
+    @apply inline-block h-2 w-2 rounded-full bg-gold-500;
+  }
+
+  /* ---- buttons ------------------------------------------------------ */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3
+           text-sm font-bold transition-all duration-200 disabled:opacity-60;
+  }
+  .btn-primary {
+    @apply btn bg-navy-700 text-white shadow-pill hover:bg-navy-800
+           hover:shadow-lift active:scale-[0.98];
+  }
+  /* The single orange action on a page — never more than one per view */
+  .btn-accent {
+    @apply btn bg-accent-500 text-white shadow-pill hover:bg-accent-600
+           hover:shadow-lift active:scale-[0.98];
+  }
+  .btn-quiet {
+    @apply btn border border-rule bg-surface text-ink hover:border-navy-300
+           hover:bg-navy-50 active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-navy-700 hover:bg-navy-50;
+  }
+
+  /* ---- form controls ------------------------------------------------ */
+  .field {
+    @apply w-full rounded-xl border border-rule bg-surface px-4 py-3.5 text-sm text-ink
+           transition-all placeholder:text-ink-soft focus:border-navy-700
+           focus:outline-none focus:ring-4 focus:ring-navy-700/10;
+  }
+  /* Input that carries a leading icon — padding clears the glyph on both sides */
+  .field-icon { @apply ps-11; }
+  .field-shell { @apply relative; }
+  .field-shell > .field-glyph {
+    @apply pointer-events-none absolute inset-y-0 start-0 flex w-11 items-center
+           justify-center text-ink-soft transition-colors;
+  }
+  .field-shell:focus-within > .field-glyph { @apply text-navy-700; }
+  .label { @apply mb-2 block text-sm font-bold text-ink; }
+  .hint { @apply mt-1.5 text-xs text-ink-soft; }
+
+  /* ---- status pills -------------------------------------------------- */
+  .pill { @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold; }
+  .pill-ok    { @apply pill bg-teal-50 text-teal-700; }
+  .pill-wait  { @apply pill bg-gold-500 text-white; }
+  .pill-info  { @apply pill bg-navy-50 text-navy-700; }
+  .pill-muted { @apply pill bg-rule text-ink-muted; }
+
+  /* Floating info chip used around the hero visual */
+  .chip {
+    @apply inline-flex items-center gap-2.5 rounded-2xl bg-surface px-4 py-3
+           text-sm font-bold text-ink shadow-chip;
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  /* Hover lift shared by every interactive card */
+  .hover-lift {
+    @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-lift;
+  }
+  /* Vertical rhythm between major page sections */
+  .section-gap { @apply space-y-14 sm:space-y-20; }
+}
+
+/* ---------------------------------------------------------------
+   RTL
+   --------------------------------------------------------------- */
+[dir='rtl'] body { line-height: 1.9; }
+[dir='rtl'] .tracking-tight { letter-spacing: 0; }
+[dir='rtl'] .leaflet-container,
+[dir='rtl'] .recharts-wrapper { direction: ltr; }
+[dir='rtl'] .bubble-user { border-bottom-right-radius: 1rem; border-bottom-left-radius: 0.2rem; }
+[dir='rtl'] .bubble-bot  { border-bottom-left-radius: 1rem;  border-bottom-right-radius: 0.2rem; }
+
+/* ---------------------------------------------------------------
+   Accessibility modes
+   --------------------------------------------------------------- */
+.a11y-font-1 { font-size: 106%; }
+.a11y-font-2 { font-size: 114%; }
+.a11y-font-3 { font-size: 124%; }
+
+.a11y-high-contrast body { background: #000 !important; color: #fff !important; }
+.a11y-high-contrast .card,
+.a11y-high-contrast .card-pad,
+.a11y-high-contrast .block-shell,
+.a11y-high-contrast [class*='bg-surface'],
+.a11y-high-contrast [class*='bg-white'] {
+  background: #0b0b0b !important;
+  border-color: #7a7a7a !important;
+  color: #fff !important;
+}
+.a11y-high-contrast a, .a11y-high-contrast button { text-decoration: underline; }
+
+.a11y-highlight-links a {
+  outline: 2px solid #C4701F;
+  outline-offset: 2px;
+  background: rgba(196, 112, 31, 0.14);
+}
+
+.a11y-big-cursor, .a11y-big-cursor * {
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'><path d='M8 4 L8 36 L16 28 L21 40 L27 37 L22 26 L34 26 Z' fill='%230F3260' stroke='white' stroke-width='2.5'/></svg>") 6 4, auto;
+}
+
+.a11y-readable-font, .a11y-readable-font * {
+  font-family: Verdana, Tahoma, 'Segoe UI', sans-serif !important;
+  letter-spacing: 0.02em;
+  word-spacing: 0.08em;
+}
+
+.a11y-reduce-motion *,
+.a11y-reduce-motion *::before,
+.a11y-reduce-motion *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Read-aloud: show what the pointer will speak */
+.a11y-read-aloud h1:hover, .a11y-read-aloud h2:hover, .a11y-read-aloud h3:hover,
+.a11y-read-aloud h4:hover, .a11y-read-aloud p:hover, .a11y-read-aloud li:hover,
+.a11y-read-aloud a:hover, .a11y-read-aloud button:hover, .a11y-read-aloud label:hover,
+.a11y-read-aloud td:hover, .a11y-read-aloud th:hover, .a11y-read-aloud [data-read]:hover {
+  outline: 2px dashed #C4701F;
+  outline-offset: 3px;
+  border-radius: 6px;
+  cursor: help;
+  background-color: rgba(196, 112, 31, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

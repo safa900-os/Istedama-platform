@@ -1,0 +1,19 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+npm-debug.log*
+coverage/
+.DS_Store
+.vscode/
+.idea/
+
+# Uploaded company documents (see server/.gitignore)
+uploads/
+
+# A complete second copy of the project sits nested inside it. Left on disk
+# untouched — it may be a backup — but kept out of the repository, where it
+# would double the clone and give Render two of every path to choose from.
+/istidamah-platform6666/

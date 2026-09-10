@@ -1,0 +1,102 @@
+# Render blueprint — deploys the whole platform from one file.
+#
+#   istidamah-api      the Express API (Node web service)
+#   istidamah-client   the React build (static site)
+#
+# The database is NOT here. Render's free tier has no managed MongoDB and gives
+# a web service an ephemeral disk, so a Mongo container running beside the API
+# would lose every company, evaluation and booking on each redeploy — and the
+# free tier redeploys whenever the service wakes. MongoDB Atlas M0 is free and
+# persistent; its connection string goes in MONGO_URI below.
+#
+# Two values are deliberately not in this file, because one is a secret and the
+# other is not known until the first deploy has assigned a URL. Both are marked
+# `sync: false`, which makes Render ask for them in the dashboard:
+#
+#   MONGO_URI      on istidamah-api      the Atlas connection string
+#   VITE_API_URL   on istidamah-client   https://<api-host>/api
+#   CLIENT_ORIGIN  on istidamah-api      https://<client-host>
+#
+# See DEPLOY.md for the order to do them in.
+
+services:
+  # ----------------------------------------------------------------- the API
+  - type: web
+    name: istidamah-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    rootDir: server
+    buildCommand: npm ci --omit=dev
+    startCommand: node src/server.js
+
+    # Render restarts the service if this stops answering, and uses it to know
+    # when a deploy is actually live rather than merely started.
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Generated once by Render and never printed. The repo's default —
+      # "change_this_super_secret_key" — would let anyone who has read the
+      # source mint a valid admin token.
+      - key: JWT_SECRET
+        generateValue: true
+
+      - key: JWT_EXPIRES_IN
+        value: 7d
+
+      # The Atlas connection string. Secret, so it is entered in the dashboard.
+      - key: MONGO_URI
+        sync: false
+
+      # The deployed client's origin, e.g. https://istidamah-client.onrender.com
+      # Not '*': that would let any site on the internet call this API with a
+      # user's token.
+      - key: CLIENT_ORIGIN
+        sync: false
+
+      # Guards the demo accounts. Absent, the seed refuses to create them in
+      # production. See server/src/seed.js.
+      - key: ALLOW_DEMO_ACCOUNTS
+        value: "false"
+
+  # -------------------------------------------------------------- the client
+  - type: web
+    name: istidamah-client
+    runtime: static
+    plan: free
+    rootDir: client
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+
+    envVars:
+      # Vite inlines this at BUILD time, so changing it needs a redeploy, not
+      # a restart. Full URL including /api.
+      - key: VITE_API_URL
+        sync: false
+
+    routes:
+      # React Router owns the paths. Without this, opening /partners directly —
+      # or refreshing on it — asks Render for a file that does not exist and
+      # returns 404.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      # The hashed asset filenames Vite emits are safe to cache forever; a new
+      # build produces new names.
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable

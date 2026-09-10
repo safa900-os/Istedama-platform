@@ -1,0 +1,229 @@
+/*
+ * The reel is a containment context, so everything inside it can be sized in
+ * `cqw` — a percentage of the reel's own width.
+ *
+ * Its type used to be sized in `vw`, against the viewport. That held together
+ * only while the reel happened to be about seventy per cent of the window: put
+ * the same reel in the hero column, a third of that width, and the headline
+ * kept the size it had in a box less than half as wide, while the wordmark —
+ * sized as a percentage of the stage — shrank with the box. Nothing lined up.
+ *
+ * In `cqw` the whole scene scales with the frame at any width, which is what
+ * makes it drop into a narrow column and still read as one composition.
+ */
+.promo-stage {
+  container-type: inline-size;
+}
+
+/**
+ * Promo reel timeline.
+ *
+ * Ported from the static site's `promo.html`, with two substantive changes:
+ *
+ *  1. Re-tokened to the current palette. The original was built on the old
+ *     brand (#223E98 navy / #EC9D51 orange); on the "Clean Portal" ground
+ *     those read as a different product, so every colour here maps to a
+ *     Tailwind token instead.
+ *
+ *  2. Retimed. The original scenes overlapped — the tagline ran to 84%, the
+ *     pillars from 68%, the closing from 82% — so between 82–84% three scenes
+ *     were on screen at once. That was never visible because the pillar markup
+ *     was missing from the file entirely, so the clash went unnoticed. The four
+ *     scenes below get a quarter of the loop each with a short crossfade.
+ *
+ * The whole reel is one 9s clock. Every animation shares that duration so the
+ * scenes stay in phase for as long as the page is open; `animation-play-state`
+ * on the stage pauses all of them together.
+ */
+
+.promo-stage {
+  --promo-navy: #223E98;
+  --promo-navy-deep: #14255C;
+  --promo-accent: #EC9D51;
+  --promo-ink: #111834;
+  --promo-muted: #66708F;
+
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(circle at 25% 20%, #ffffff 0%, #F7F8FD 50%, #EEF1FA 100%);
+}
+
+/* One switch pauses the entire reel — ambient layers included. */
+.promo-stage[data-playing='false'] * {
+  animation-play-state: paused !important;
+}
+
+/* ------------------------------------------------------------- ambient */
+
+.promo-glow {
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(circle at 22% 28%, rgba(236, 157, 81, 0.18), transparent 42%),
+    radial-gradient(circle at 78% 72%, rgba(15, 50, 96, 0.18), transparent 48%);
+  filter: blur(12px);
+  animation: promo-drift 9s ease-in-out infinite;
+}
+@keyframes promo-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-2%, 2%) scale(1.08); }
+}
+
+.promo-streak {
+  position: absolute;
+  top: 0;
+  left: -30%;
+  width: 40%;
+  height: 140%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.85), rgba(236, 157, 81, 0.35), transparent);
+  transform: rotate(12deg);
+  opacity: 0;
+  animation: promo-sweep 9s ease-in-out infinite;
+}
+@keyframes promo-sweep {
+  0%   { left: -40%; opacity: 0; }
+  4%   { opacity: 1; }
+  14%  { left: 130%; opacity: 0; }
+  100% { left: 130%; opacity: 0; }
+}
+
+.promo-particle {
+  position: absolute;
+  border-radius: 50%;
+  animation: promo-floaty 9s ease-in-out infinite;
+}
+@keyframes promo-floaty {
+  0%, 100% { transform: translateY(0);     opacity: 0.15; }
+  50%      { transform: translateY(-18px); opacity: 0.55; }
+}
+
+/* -------------------------------------------------------------- scenes */
+
+.promo-scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+  opacity: 0;
+  padding: 0 6%;
+}
+
+/* Scene 1 — mark assembles: icon settles, wordmark slides in beside it. */
+.promo-scene-reveal { animation: promo-s1 9s ease-in-out infinite; }
+@keyframes promo-s1 {
+  0%   { opacity: 0; }
+  3%   { opacity: 1; }
+  22%  { opacity: 1; }
+  26%  { opacity: 0; transform: translateY(-10px); }
+  100% { opacity: 0; }
+}
+
+.promo-icon { animation: promo-icon-pop 9s ease-in-out infinite; }
+@keyframes promo-icon-pop {
+  0%   { transform: scale(0.5) rotate(-25deg); opacity: 0; }
+  7%   { transform: scale(1.1) rotate(4deg);   opacity: 1; }
+  11%  { transform: scale(1) rotate(0deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+/*
+ * The lockup keeps one arrangement in both languages — icon leading, wordmark
+ * trailing — because a brand mark is not text and should not mirror with the
+ * reading direction. The wordmark therefore always settles to the right of the
+ * icon, and always slides in from the right; `translateX` is physical, not
+ * logical, so this needs no per-direction rule.
+ */
+.promo-wordmark { animation: promo-wm-slide 9s ease-in-out infinite; }
+@keyframes promo-wm-slide {
+  0%, 9% { opacity: 0; transform: translateX(24px); }
+  15%    { opacity: 1; transform: translateX(0); }
+  100%   { opacity: 1; transform: translateX(0); }
+}
+
+/* Scene 2 — tagline. */
+.promo-scene-tagline { animation: promo-s2 9s ease-in-out infinite; }
+@keyframes promo-s2 {
+  0%, 26% { opacity: 0; transform: translateY(14px); }
+  30%     { opacity: 1; transform: translateY(0); }
+  48%     { opacity: 1; transform: translateY(0); }
+  52%     { opacity: 0; transform: translateY(-14px); }
+  100%    { opacity: 0; }
+}
+
+/*
+ * Scene 3 — the three pillars. Restored; see the note at the top.
+ *
+ * The wrapper stays visible and each card animates itself, so the cards can be
+ * staggered against each other. It never takes pointer events: it covers the
+ * stage for the whole loop, and would otherwise swallow clicks meant for the
+ * play control underneath.
+ */
+.promo-scene-pillars {
+  opacity: 1;
+  pointer-events: none;
+}
+
+.promo-pillar {
+  opacity: 0;
+  animation: promo-s3 9s ease-out infinite;
+}
+/* A tenth of a second apart. The offset persists across loops, which is the
+   intent — each card keeps its place in the cascade. */
+.promo-pillar:nth-child(2) { animation-delay: 0.1s; }
+.promo-pillar:nth-child(3) { animation-delay: 0.2s; }
+@keyframes promo-s3 {
+  0%, 52% { opacity: 0; transform: translateY(24px) scale(0.94); }
+  57%     { opacity: 1; transform: translateY(0) scale(1); }
+  72%     { opacity: 1; transform: translateY(0) scale(1); }
+  76%     { opacity: 0; transform: translateY(-14px) scale(0.96); }
+  100%    { opacity: 0; }
+}
+
+/* Scene 4 — closing lockup, held to the end of the loop. */
+.promo-scene-closing { animation: promo-s4 9s ease-in-out infinite; }
+@keyframes promo-s4 {
+  0%, 78% { opacity: 0; transform: scale(0.92); }
+  84%     { opacity: 1; transform: scale(1); }
+  100%    { opacity: 1; transform: scale(1); }
+}
+
+.promo-flare {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  animation: promo-flare 9s ease-in-out infinite;
+}
+@keyframes promo-flare {
+  0%, 80% { opacity: 0; box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+  85%     { opacity: 1; box-shadow: 0 0 60px 42px rgba(236, 157, 81, 0.32); }
+  92%     { opacity: 0; box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+  100%    { opacity: 0; }
+}
+
+/*
+ * Scene indicator. Four dots, each filling during its own quarter of the loop.
+ * Purely a readout of the same clock — it is aria-hidden, since the reel is
+ * already labelled and announcing four dots adds nothing.
+ */
+.promo-tick {
+  animation-duration: 9s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.promo-tick:nth-child(1) { animation-name: promo-tick-1; }
+.promo-tick:nth-child(2) { animation-name: promo-tick-2; }
+.promo-tick:nth-child(3) { animation-name: promo-tick-3; }
+.promo-tick:nth-child(4) { animation-name: promo-tick-4; }
+@keyframes promo-tick-1 { 0%, 25% { opacity: 1; } 26%, 100% { opacity: 0.28; } }
+@keyframes promo-tick-2 { 0%, 25% { opacity: 0.28; } 26%, 50% { opacity: 1; } 51%, 100% { opacity: 0.28; } }
+@keyframes promo-tick-3 { 0%, 50% { opacity: 0.28; } 51%, 76% { opacity: 1; } 77%, 100% { opacity: 0.28; } }
+@keyframes promo-tick-4 { 0%, 76% { opacity: 0.28; } 77%, 100% { opacity: 1; } }

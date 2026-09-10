@@ -1,0 +1,8 @@
+node_modules
+.env
+*.log
+coverage
+
+# Uploaded company documents — CRs, tax cards, insurance certificates.
+# Real business paperwork; never commit it.
+uploads/

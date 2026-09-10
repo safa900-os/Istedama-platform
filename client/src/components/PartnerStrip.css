@@ -1,0 +1,70 @@
+/*
+ * The strategic-partner strip.
+ *
+ * Written as a CSS animation rather than a JS one on purpose: a marquee runs
+ * for as long as the page is open, and a CSS transform animation is handed to
+ * the compositor and costs nothing per frame, where a JS loop would keep the
+ * main thread busy the whole time.
+ *
+ * Two knobs are set from the component, so speed stays constant as partners
+ * are added and the direction follows the language:
+ *   --pstrip-duration  one full pass through a single copy of the list
+ *   --pstrip-shift     one copy's share of the track, negative in LTR and
+ *                      positive in RTL (the component sets how many copies)
+ */
+
+.pstrip-viewport {
+  overflow: hidden;
+  /* The ends fade out, so a card slides away rather than being sliced off by
+     a hard edge. Masked on both sides, so it reads the same either way. */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
+}
+
+.pstrip-track {
+  display: flex;
+  width: max-content;
+  animation: pstrip-slide var(--pstrip-duration, 42s) linear infinite;
+}
+
+@keyframes pstrip-slide {
+  from { transform: translate3d(0, 0, 0); }
+  /* Exactly one copy's width. Every copy is identical, so the frame at the
+     end of a pass is pixel-identical to the frame at the start and the loop
+     has no seam. */
+  to   { transform: translate3d(var(--pstrip-shift, -25%), 0, 0); }
+}
+
+/*
+ * Movement stops while someone is reading or tabbing through it. Without this
+ * a name would slide out from under the pointer mid-sentence — and the strip
+ * carries Arabic institution names long enough to need a moment.
+ */
+.pstrip-viewport:hover .pstrip-track,
+.pstrip-viewport:focus-within .pstrip-track {
+  animation-play-state: paused;
+}
+
+/*
+ * No motion at all when the reader has asked for none. The strip then behaves
+ * as an ordinary horizontal scroller, so every partner is still reachable —
+ * stopping the animation without this would hide whatever the first screen
+ * could not fit.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .pstrip-viewport {
+    overflow-x: auto;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .pstrip-track { animation: none !important; }
+}
+
+/* Same treatment for the site's own "reduce motion" switch in the
+   accessibility widget, which stops animations by class rather than by
+   system preference. */
+.a11y-reduce-motion .pstrip-viewport {
+  overflow-x: auto;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
