@@ -205,6 +205,23 @@ describe('Bid documents', () => {
     expect(count()).toBe(before);
   });
 
+  test('a document whose file has gone says so, rather than failing as a server fault', async () => {
+    const up = await upload(mine, 'technical', PDF, 'technical.pdf');
+    const { _id: docId, storedName } = up.body.data.documents[0];
+
+    // What a redeploy does to an ephemeral disk: the record stays, the file
+    // does not.
+    fs.unlinkSync(path.join(rootFor('bids'), storedName));
+
+    const res = await asUser(
+      mine,
+      request(app).get(`/api/applications/tender/${tenderId}/documents/${docId}`)
+    );
+
+    expect(res.status).toBe(404);
+    expect(res.body.message).toMatch(/no longer in storage/i);
+  });
+
   test('attaching requires a session', async () => {
     const res = await request(app)
       .post(`/api/applications/tender/${tenderId}/documents/technical`)
