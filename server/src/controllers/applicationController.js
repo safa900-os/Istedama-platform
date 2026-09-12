@@ -1,3 +1,4 @@
+const fs = require('fs');
 const asyncHandler = require('express-async-handler');
 const Application = require('../models/Application');
 const { Tender } = require('../models/Content');
@@ -412,7 +413,20 @@ const downloadBidDocument = asyncHandler(async (req, res) => {
     throw new Error('Not authorised to read this document');
   }
 
-  res.download(resolveStoredPath(doc.storedName, 'bids'), doc.originalName);
+  /*
+    The record can outlive the file. Uploads sit on the host's own disk, and on
+    a platform that gives a free service an ephemeral one, a redeploy wipes it
+    while the bid still lists the attachment. Saying so with a 404 is honest;
+    letting `res.download` throw ENOENT would report a server fault for a file
+    the server knows perfectly well is gone.
+  */
+  const fullPath = resolveStoredPath(doc.storedName, 'bids');
+  if (!fs.existsSync(fullPath)) {
+    res.status(404);
+    throw new Error('This document is no longer in storage');
+  }
+
+  res.download(fullPath, doc.originalName);
 });
 
 // @desc  Remove a file from the caller's draft bid
