@@ -490,7 +490,97 @@ const getMyBid = asyncHandler(async (req, res) => {
   res.json({ success: true, data: bid || null });
 });
 
+// @desc  Award a tender to one bid
+// @route POST /api/applications/tender/:tenderId/award/:bidId
+const awardTender = asyncHandler(async (req, res) => {
+  const tender = await Tender.findById(req.params.tenderId);
+  if (!tender) {
+    res.status(404);
+    throw new Error('Tender not found');
+  }
+  if (tender.awardedBid) {
+    res.status(409);
+    throw new Error('This tender has already been awarded');
+  }
+
+  const winner = await Application.findOne({
+    _id: req.params.bidId,
+    tenderId: tender._id
+  });
+  if (!winner) {
+    res.status(404);
+    throw new Error('That bid is not on this tender');
+  }
+
+  /*
+    A draft was never submitted — the buyer is not supposed to have seen it,
+    and awarding one would be awarding a price its author never stood behind.
+  */
+  if (winner.status === 'draft') {
+    res.status(409);
+    throw new Error('That bid was never submitted');
+  }
+  if (winner.status === 'withdrawn') {
+    res.status(409);
+    throw new Error('That bid was withdrawn');
+  }
+
+  /*
+    Awarding is one decision with two halves: this bid wins, and every other
+    bid loses. Leaving the others `submitted` would tell each of those
+    suppliers that they are still in a competition that is over — so they are
+    closed here, in the same operation, rather than waiting for someone to
+    remember.
+  */
+  const others = await Application.find({
+    tenderId: tender._id,
+    _id: { $ne: winner._id },
+    status: { $nin: ['draft', 'withdrawn', 'rejected'] }
+  });
+
+  // The previous state is read before it is overwritten, or the audit trail
+  // records every award as having come from 'accepted'.
+  const cameFrom = winner.status;
+  const allowed = Application.TRANSITIONS[cameFrom] || [];
+  if (!allowed.includes('accepted')) {
+    /*
+      A bid is reviewed before it is awarded. The lifecycle refuses the jump
+      from 'submitted' straight to 'accepted' on purpose: it is what makes "we
+      evaluated the bids" a fact in the record rather than a claim. Awarding
+      does not get to step around that — it asks the buyer to move the bid into
+      review first, which is the act it is pretending happened.
+    */
+    res.status(409);
+    throw new Error(
+      cameFrom === 'submitted'
+        ? 'Move this bid into review before awarding it'
+        : `A bid that is ${cameFrom} cannot be accepted`
+    );
+  }
+
+  winner.status = 'accepted';
+  winner.history.push({ from: cameFrom, to: 'accepted', by: req.user._id });
+  await winner.save();
+
+  for (const bid of others) {
+    bid.history.push({ from: bid.status, to: 'rejected', by: req.user._id });
+    bid.status = 'rejected';
+    await bid.save();
+  }
+
+  tender.awardedBid = winner._id;
+  tender.awardedAt = new Date();
+  tender.status = 'awarded';
+  await tender.save();
+
+  res.json({
+    success: true,
+    data: { tender, awarded: winner, closed: others.length }
+  });
+});
+
 module.exports = {
+  awardTender,
   saveDraft,
   submitBid,
   getMyBid,
