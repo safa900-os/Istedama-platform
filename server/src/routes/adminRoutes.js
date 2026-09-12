@@ -38,6 +38,7 @@ router.delete('/users/:id', c.deleteUser);
 router.get('/registrations', c.listRegistrations);
 router.patch('/registrations/:id/review', c.reviewRegistration);
 router.patch('/registrations/:id/approve', c.approveRegistration);
+router.post('/registrations/:id/notify-expiry', c.notifyExpiredDocuments);
 router.patch(
   '/registrations/:id/reject',
   [

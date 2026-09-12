@@ -23,6 +23,9 @@ import Freelance from './pages/Freelance';
 import Services from './pages/Services';
 import Tenders from './pages/Tenders';
 import TenderDetail from './pages/TenderDetail';
+import Notifications from './pages/Notifications';
+import RegistrationQueue from './pages/admin/RegistrationQueue';
+import RegistrationRecord from './pages/admin/RegistrationRecord';
 import Facilities from './pages/Facilities';
 import Advertise from './pages/Advertise';
 import Discounts from './pages/Discounts';
@@ -63,6 +66,38 @@ export default function App() {
           <Route path="/contact" element={<Contact />} />
           <Route path="/tenders" element={<Tenders />} />
           <Route path="/tenders/:id" element={<TenderDetail />} />
+
+          <Route
+            path="/notifications"
+            element={
+              <ProtectedRoute>
+                <Notifications />
+              </ProtectedRoute>
+            }
+          />
+
+          {/*
+            The review queue is one page per kind of applicant, and each
+            registration has a page of its own. Staff-only at the route, not
+            merely hidden from the menu — a decision that admits a business to
+            a procurement must not be reachable by typing the URL.
+          */}
+          <Route
+            path="/admin/registrations/:entityType"
+            element={
+              <ProtectedRoute roles={['admin', 'auditor']}>
+                <RegistrationQueue />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/registrations/:entityType/:id"
+            element={
+              <ProtectedRoute roles={['admin', 'auditor']}>
+                <RegistrationRecord />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/facilities" element={<Facilities />} />
           <Route path="/discounts" element={<Discounts />} />
           <Route path="/advertise" element={<Advertise />} />

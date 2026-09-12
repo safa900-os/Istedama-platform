@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Globe, LogOut, Menu, X, ChevronDown } from 'lucide-react';
+import { Bell, ChevronDown, Globe, LogOut, Menu, X } from 'lucide-react';
+import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { EASE } from '../motion/presets';
@@ -46,7 +47,28 @@ export default function Navbar() {
   const [servicesOpen, setServicesOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { user, logout } = useAuth();
-  const { t, lang, toggleLang } = useLanguage();
+  const [unread, setUnread] = useState(0);
+
+  /*
+    Read once when the session changes rather than polled. A badge that is a
+    few minutes stale costs nothing; a request every few seconds from every
+    open tab costs the free-tier API its whole budget.
+  */
+  useEffect(() => {
+    if (!user) {
+      setUnread(0);
+      return undefined;
+    }
+    let live = true;
+    api
+      .get('/notifications', { params: { unread: 'true', limit: 1 } })
+      .then((res) => live && setUnread(res.data.unreadCount || 0))
+      .catch(() => live && setUnread(0));
+    return () => {
+      live = false;
+    };
+  }, [user]);
+  const { t, fmt, lang, toggleLang } = useLanguage();
 
   const trailing = user ? [...TRAILING, ...ACCOUNT_LINKS] : TRAILING;
 
@@ -190,6 +212,30 @@ export default function Navbar() {
           >
             <Globe size={15} /> <span className="hidden sm:inline">{lang === 'en' ? 'العربية' : 'EN'}</span>
           </motion.button>
+
+          {/*
+            The unread count, beside the account control rather than buried in
+            a menu. An approval or a rejection is the thing the applicant came
+            back to find out, so it is worth one badge in the bar.
+          */}
+          {user && (
+            <Link
+              to="/notifications"
+              className="relative flex items-center rounded-full px-2.5 py-2 text-ink-muted transition-colors hover:bg-navy-50 hover:text-navy-700"
+              aria-label={
+                unread > 0
+                  ? `${t('notif.openNotifications')} — ${fmt(unread)} ${t('notif.unread')}`
+                  : t('notif.openNotifications')
+              }
+            >
+              <Bell size={16} aria-hidden="true" />
+              {unread > 0 && (
+                <span className="absolute -top-0.5 end-0.5 min-w-[1.05rem] rounded-full bg-accent-500 px-1 text-center text-[0.65rem] font-black leading-[1.05rem] text-navy-900">
+                  {fmt(unread)}
+                </span>
+              )}
+            </Link>
+          )}
 
           {user ? (
             <motion.button

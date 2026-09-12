@@ -1,6 +1,8 @@
 const asyncHandler = require('express-async-handler');
 const User = require('../models/User');
 const Company = require('../models/Company');
+const Notification = require('../models/Notification');
+const { DOCUMENT_SLOTS } = require('../config/documents');
 const Evaluation = require('../models/Evaluation');
 const { Tender, Facility, Booking, Advertisement, Discount, NewsPost } = require('../models/Content');
 
@@ -19,6 +21,9 @@ const { Tender, Facility, Booking, Advertisement, Discount, NewsPost } = require
  */
 
 const ASSIGNABLE_ROLES = ['sme_owner', 'merchant', 'freelancer', 'auditor', 'admin'];
+
+/** A document slot's own label, for a sentence a person reads. */
+const SLOT_LABEL = (slot, lang) => DOCUMENT_SLOTS[slot]?.label?.[lang] || slot;
 
 const publicUser = (u) => ({
   _id: u._id,
@@ -229,6 +234,39 @@ const listRegistrations = asyncHandler(async (req, res) => {
   res.json({ success: true, count: registrations.length, data: registrations });
 });
 
+/**
+ * What the applicant is told, in both languages, for each decision.
+ *
+ * Written out here rather than assembled from fragments because these are the
+ * sentences a person reads at the moment they learn whether they may trade.
+ * The rejection carries the reason inside the body: a notice that says only
+ * "your registration was rejected" sends the applicant back to the site to
+ * find out why, which is work the notice should have saved them.
+ */
+const DECISION_NOTICE = {
+  approved: (company) => ({
+    kind: 'registration_approved',
+    title: 'Your registration has been approved',
+    titleAr: 'تمت الموافقة على تسجيلك',
+    body: `${company.companyName} is approved. You can now take part in tenders on the platform.`,
+    bodyAr: `تمت الموافقة على ${company.companyNameAr || company.companyName}. يمكنك الآن المشاركة في المناقصات على المنصة.`
+  }),
+  rejected: (company) => ({
+    kind: 'registration_rejected',
+    title: 'Your registration was not approved',
+    titleAr: 'لم تتم الموافقة على تسجيلك',
+    body: `${company.companyName} was not approved. Reason: ${company.rejectionReason} You can correct the record and submit it again.`,
+    bodyAr: `لم تتم الموافقة على ${company.companyNameAr || company.companyName}. السبب: ${company.rejectionReason} يمكنك تصحيح البيانات وإعادة التقديم.`
+  }),
+  under_review: (company) => ({
+    kind: 'registration_under_review',
+    title: 'Your registration is being reviewed',
+    titleAr: 'طلب تسجيلك قيد المراجعة',
+    body: `${company.companyName} is with the programme team. You will be told when a decision is made.`,
+    bodyAr: `طلب ${company.companyNameAr || company.companyName} لدى فريق البرنامج، وسيصلك إشعار عند صدور القرار.`
+  })
+};
+
 /** Moves a registration through its lifecycle, refusing any jump it does not allow. */
 async function transition(req, res, to, extra = {}) {
   const company = await Company.findById(req.params.id);
@@ -251,8 +289,71 @@ async function transition(req, res, to, extra = {}) {
   Object.assign(company, extra);
   await company.save();
 
+  /*
+    The notice goes to the account that owns the record, and carries the moment
+    the decision was made — `createdAt` on the notification. An applicant's
+    first question after "was I approved?" is "when?", and a notice that cannot
+    answer it sends them to ask.
+
+    `notify` never throws: the applicant is approved whether or not the notice
+    stored, and losing a completed approval to a failed insert would be the
+    worse outcome.
+  */
+  if (company.owner && DECISION_NOTICE[to]) {
+    await Notification.notify({
+      user: company.owner,
+      ...DECISION_NOTICE[to](company),
+      subjectType: 'company',
+      subjectId: company._id,
+      actor: req.user._id
+    });
+  }
+
   res.json({ success: true, data: company });
 }
+
+// @desc  Tell an applicant that a document on their record has expired
+// @route POST /api/admin/registrations/:id/notify-expiry
+const notifyExpiredDocuments = asyncHandler(async (req, res) => {
+  const company = await Company.findById(req.params.id);
+  if (!company) {
+    res.status(404);
+    throw new Error('Registration not found');
+  }
+  if (!company.owner) {
+    res.status(409);
+    throw new Error('This registration has no account to notify');
+  }
+
+  /*
+    Sent for what has actually lapsed, read off the record at this moment
+    rather than taken from the request. A reviewer clicking the button on a
+    stale page must not send a notice about a document that has since been
+    replaced.
+  */
+  const expired = company.expiredDocuments;
+  if (!expired.length) {
+    res.status(409);
+    throw new Error('Nothing on this registration has expired');
+  }
+
+  const names = expired.map((d) => SLOT_LABEL(d.slot, 'en')).join(', ');
+  const namesAr = expired.map((d) => SLOT_LABEL(d.slot, 'ar')).join('، ');
+
+  const notification = await Notification.notify({
+    user: company.owner,
+    kind: 'document_expired',
+    title: 'A document on your registration has expired',
+    titleAr: 'انتهت صلاحية مستند في تسجيلك',
+    body: `These documents are out of date: ${names}. Upload current copies so your registration stays valid.`,
+    bodyAr: `انتهت صلاحية المستندات التالية: ${namesAr}. يُرجى رفع نسخ سارية للحفاظ على صلاحية تسجيلك.`,
+    subjectType: 'company',
+    subjectId: company._id,
+    actor: req.user._id
+  });
+
+  res.json({ success: true, data: { notification, expired } });
+});
 
 const approveRegistration = asyncHandler((req, res) => transition(req, res, 'approved'));
 
@@ -306,6 +407,7 @@ const moderateBooking = asyncHandler(async (req, res) => {
 
 module.exports = {
   listRegistrations,
+  notifyExpiredDocuments,
   approveRegistration,
   rejectRegistration,
   reviewRegistration,
