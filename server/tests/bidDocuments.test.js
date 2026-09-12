@@ -16,6 +16,7 @@ const app = require('../src/server');
 const User = require('../src/models/User');
 const Application = require('../src/models/Application');
 const { Tender } = require('../src/models/Content');
+const Company = require('../src/models/Company');
 const { rootFor } = require('../src/middleware/upload');
 
 const PDF = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(64, 0x20)]);
@@ -30,10 +31,32 @@ let mine;
 let rival;
 
 /** Registers an account and returns its token. */
+let crSeq = 0;
+
+/** Registers an approved bidder and returns its token. */
 const signUp = async (email) => {
   const res = await request(app)
     .post('/api/auth/register')
     .send({ name: 'Bidder', email, password: 'Str0ngPass!23', role: 'merchant' });
+
+  /*
+    Bidding requires an approved registration. These tests are about the files
+    on a bid, not about the gate, so each bidder gets one — with its own CR
+    number, since two companies may not claim the same.
+  */
+  crSeq += 1;
+  await Company.create({
+    companyName: `Bidder ${crSeq}`,
+    crNumber: String(1000000 + crSeq),
+    governorate: 'Muscat',
+    employeeCount: 5,
+    omaniEmployeeCount: 3,
+    location: { lat: 23.58, lng: 58.38 },
+    entityType: 'merchant',
+    owner: res.body.data._id,
+    registrationStatus: 'approved'
+  });
+
   return res.body.token;
 };
 
@@ -51,7 +74,12 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await Promise.all([Application.deleteMany(), Tender.deleteMany(), User.deleteMany()]);
+  await Promise.all([
+    Application.deleteMany(),
+    Tender.deleteMany(),
+    User.deleteMany(),
+    Company.deleteMany()
+  ]);
 
   mine = await signUp('bidder@example.om');
   rival = await signUp('rival@example.om');

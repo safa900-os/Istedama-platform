@@ -33,6 +33,21 @@ router.patch(
 
 router.delete('/users/:id', c.deleteUser);
 
+/* Registration review. See adminController for why approve and reject are
+   separate endpoints rather than one status field. */
+router.get('/registrations', c.listRegistrations);
+router.patch('/registrations/:id/review', c.reviewRegistration);
+router.patch('/registrations/:id/approve', c.approveRegistration);
+router.patch(
+  '/registrations/:id/reject',
+  [
+    body('reason').trim().notEmpty().withMessage('Say why the registration was rejected')
+      .isLength({ max: 1000 })
+  ],
+  validate,
+  c.rejectRegistration
+);
+
 router.patch(
   '/advertisements/:id/status',
   [body('status').isIn(['approved', 'rejected', 'pending'])],

@@ -6,12 +6,34 @@ const app = require('../src/server');
 const User = require('../src/models/User');
 const Application = require('../src/models/Application');
 const { Tender } = require('../src/models/Content');
+const Company = require('../src/models/Company');
 
 let mongo;
 let token;
 let tenderId;
 
 const auth = (req) => req.set('Authorization', `Bearer ${token}`);
+
+/**
+ * An approved registration, because bidding now requires one.
+ *
+ * The gate is the point of reviewing a registration at all: an unchecked party
+ * does not take part in a procurement. These suites are about what happens
+ * after that check, so they satisfy it up front rather than re-testing it —
+ * registrationReview.test.js owns the gate itself.
+ */
+const approveBidder = (ownerId, crNumber = '1234567') =>
+  Company.create({
+    companyName: 'Bidder Trading',
+    crNumber,
+    governorate: 'Muscat',
+    employeeCount: 5,
+    omaniEmployeeCount: 3,
+    location: { lat: 23.58, lng: 58.38 },
+    entityType: 'merchant',
+    owner: ownerId,
+    registrationStatus: 'approved'
+  });
 
 const makeTender = (overrides = {}) =>
   Tender.create({
@@ -34,7 +56,12 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await Promise.all([Application.deleteMany(), Tender.deleteMany(), User.deleteMany()]);
+  await Promise.all([
+    Application.deleteMany(),
+    Tender.deleteMany(),
+    User.deleteMany(),
+    Company.deleteMany()
+  ]);
 
   const res = await request(app).post('/api/auth/register').send({
     name: 'Salim Al Harthy',
@@ -43,6 +70,7 @@ beforeEach(async () => {
     role: 'merchant'
   });
   token = res.body.token || res.body.data?.token;
+  await approveBidder(res.body.data._id);
 
   const tender = await makeTender();
   tenderId = tender._id.toString();

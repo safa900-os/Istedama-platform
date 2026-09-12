@@ -2,6 +2,7 @@ const fs = require('fs');
 const asyncHandler = require('express-async-handler');
 const Application = require('../models/Application');
 const { Tender } = require('../models/Content');
+const Company = require('../models/Company');
 const { toBaisa } = require('../config/bidding');
 const {
   persistDocument,
@@ -227,7 +228,37 @@ const getApplicationStats = asyncHandler(async (req, res) => {
 
 // @desc  Create or update the caller's bid on a tender, without submitting it
 // @route PUT /api/applications/tender/:tenderId/draft
+/**
+ * Refuses a bidder whose registration has not been approved.
+ *
+ * The whole point of reviewing a registration is that an unchecked party does
+ * not take part in a procurement. Checking it at sign-in would be the wrong
+ * place — an applicant must be able to sign in to see where their application
+ * stands, and to fix what was rejected. Bidding is the act that has to wait.
+ *
+ * Staff are exempt: they are not bidding, they are administering.
+ */
+async function assertMayBid(req, res) {
+  if (isStaff(req.user)) return;
+
+  const company = await Company.findOne({ owner: req.user._id }).select('registrationStatus');
+  if (!company) {
+    res.status(403);
+    throw new Error('Register your company before bidding on a tender');
+  }
+  if (company.registrationStatus !== 'approved') {
+    res.status(403);
+    throw new Error(
+      company.registrationStatus === 'rejected'
+        ? 'Your registration was not approved. Correct it and submit it again before bidding.'
+        : 'Your registration is still being reviewed. You can bid once it is approved.'
+    );
+  }
+}
+
 const saveDraft = asyncHandler(async (req, res) => {
+  await assertMayBid(req, res);
+
   const tender = await Tender.findById(req.params.tenderId);
   if (!tender) {
     res.status(404);
@@ -285,6 +316,8 @@ const saveDraft = asyncHandler(async (req, res) => {
 // @desc  Submit the caller's bid
 // @route POST /api/applications/tender/:tenderId/submit
 const submitBid = asyncHandler(async (req, res) => {
+  await assertMayBid(req, res);
+
   const tender = await Tender.findById(req.params.tenderId);
   if (!tender) {
     res.status(404);

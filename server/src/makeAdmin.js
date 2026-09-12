@@ -17,7 +17,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const User = require('./models/User');
 
-const VALID = ['admin', 'auditor', 'sme_owner', 'merchant'];
+const VALID = ['admin', 'auditor', 'sme_owner', 'merchant', 'freelancer'];
 
 (async () => {
   const email = (process.argv[2] || '').trim().toLowerCase();
