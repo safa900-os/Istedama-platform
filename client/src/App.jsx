@@ -22,6 +22,7 @@ import News from './pages/News';
 import Freelance from './pages/Freelance';
 import Services from './pages/Services';
 import Tenders from './pages/Tenders';
+import TenderDetail from './pages/TenderDetail';
 import Facilities from './pages/Facilities';
 import Advertise from './pages/Advertise';
 import Discounts from './pages/Discounts';
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/tenders" element={<Tenders />} />
+          <Route path="/tenders/:id" element={<TenderDetail />} />
           <Route path="/facilities" element={<Facilities />} />
           <Route path="/discounts" element={<Discounts />} />
           <Route path="/advertise" element={<Advertise />} />

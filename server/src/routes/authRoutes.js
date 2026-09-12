@@ -9,7 +9,9 @@ const router = express.Router();
 
 // Roles a visitor may self-select. `auditor` and `admin` are assigned
 // internally, never claimed at sign-up.
-const SELF_SERVICE_ROLES = ['sme_owner', 'merchant'];
+// Roles a visitor may give themselves at sign-up. Auditor and admin stay
+// out of it: those are provisioned internally.
+const SELF_SERVICE_ROLES = ['sme_owner', 'merchant', 'freelancer'];
 
 const PASSWORD_MESSAGES = {
   length: `Password must be at least ${PASSWORD_MIN} characters`,

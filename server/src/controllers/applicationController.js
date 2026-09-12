@@ -1,6 +1,13 @@
 const asyncHandler = require('express-async-handler');
 const Application = require('../models/Application');
 const { Tender } = require('../models/Content');
+const { toBaisa } = require('../config/bidding');
+const {
+  persistDocument,
+  resolveStoredPath,
+  removeStoredFile,
+  BID_SLOTS
+} = require('../middleware/upload');
 
 /**
  * Applications against tenders.
@@ -15,6 +22,60 @@ const { Tender } = require('../models/Content');
 
 const STAFF = ['admin', 'auditor'];
 const isStaff = (user) => STAFF.includes(user?.role);
+
+/**
+ * Whether a tender can still take a bid.
+ *
+ * Checked on the server on every write, not once when the page loaded. A form
+ * left open across the deadline would otherwise submit against a closed
+ * tender, and the bidder would believe they had made it.
+ */
+const tenderIsOpen = (tender) =>
+  tender.status === 'open' && (!tender.closingDate || new Date(tender.closingDate) >= new Date());
+
+/**
+ * Normalises a bill of quantities from the request.
+ *
+ * Prices arrive as rials because that is what the bidder typed; they are stored
+ * as baisa. Everything derived from them — subtotal, VAT, the platform fee, the
+ * net — is recomputed by the model, so nothing a caller sends for those fields
+ * is read.
+ */
+const normaliseLineItems = (raw) =>
+  (Array.isArray(raw) ? raw : [])
+    .slice(0, 200)
+    .filter((li) => li && String(li.description || '').trim())
+    .map((li) => ({
+      description: String(li.description).trim().slice(0, 300),
+      unit: String(li.unit || '').trim().slice(0, 40),
+      quantity: Math.max(0, Number(li.quantity) || 0),
+      unitPriceBaisa: Math.max(0, toBaisa(li.unitPrice)),
+      lineTotalBaisa: 0 // recomputed on save
+    }));
+
+/** The fields a bidder owns on their own bid. */
+const applyBidFields = (bid, body) => {
+  const set = (k, v) => {
+    if (v !== undefined) bid[k] = v;
+  };
+  set('contactName', body.contactName);
+  set('contactEmail', body.contactEmail);
+  set('contactPhone', body.contactPhone);
+  set('proposalSummary', body.proposalSummary);
+  set('validityDays', body.validityDays);
+  set('vatRate', body.vatRate);
+  if (body.lineItems !== undefined) bid.lineItems = normaliseLineItems(body.lineItems);
+  if (body.hasExceptions !== undefined) {
+    bid.hasExceptions = Boolean(body.hasExceptions);
+    // Dropping the flag drops the reason with it, so a stale note cannot sit on
+    // a bid that no longer claims an exception.
+    bid.exceptionsNote = bid.hasExceptions ? String(body.exceptionsNote || '').trim() : '';
+  }
+  /*
+    platformFeeRate is deliberately not settable. It is the platform's published
+    commission, and a bid that could name its own would be able to zero it.
+  */
+};
 
 // @desc  List applications — own by default, all for staff
 // @route GET /api/applications
@@ -163,7 +224,232 @@ const getApplicationStats = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc  Create or update the caller's bid on a tender, without submitting it
+// @route PUT /api/applications/tender/:tenderId/draft
+const saveDraft = asyncHandler(async (req, res) => {
+  const tender = await Tender.findById(req.params.tenderId);
+  if (!tender) {
+    res.status(404);
+    throw new Error('Tender not found');
+  }
+  if (!tenderIsOpen(tender)) {
+    res.status(400);
+    throw new Error('This tender is no longer accepting bids');
+  }
+
+  let bid = await Application.findOne({ tenderId: tender._id, applicant: req.user._id });
+
+  if (bid && bid.status !== 'draft') {
+    /*
+      A submitted bid is a commitment the buyer may already be evaluating.
+      Editing it in place would change what was submitted without any record
+      that it changed — so the bidder withdraws and bids again instead.
+    */
+    res.status(409);
+    throw new Error('This bid has already been submitted and can no longer be edited');
+  }
+
+  if (!bid) {
+    bid = new Application({
+      tenderId: tender._id,
+      applicant: req.user._id,
+      companyId: req.body.companyId || undefined,
+      status: 'draft',
+      history: [{ from: null, to: 'draft', by: req.user._id }]
+    });
+
+    /*
+      A new bid starts from the buyer's bill of quantities, at zero rates. The
+      bidder fills in prices rather than retyping the scope, which is what makes
+      two bids comparable: the same lines in the same order, so a lower total
+      means a better price and not a line quietly left out.
+    */
+    if (req.body.lineItems === undefined && tender.scopeItems?.length) {
+      bid.lineItems = tender.scopeItems.map((item) => ({
+        description: item.description,
+        unit: item.unit || '',
+        quantity: item.quantity,
+        unitPriceBaisa: 0,
+        lineTotalBaisa: 0
+      }));
+    }
+  }
+
+  applyBidFields(bid, req.body);
+  await bid.save();
+
+  res.status(200).json({ success: true, data: bid });
+});
+
+// @desc  Submit the caller's bid
+// @route POST /api/applications/tender/:tenderId/submit
+const submitBid = asyncHandler(async (req, res) => {
+  const tender = await Tender.findById(req.params.tenderId);
+  if (!tender) {
+    res.status(404);
+    throw new Error('Tender not found');
+  }
+  if (!tenderIsOpen(tender)) {
+    res.status(400);
+    throw new Error('The closing date for this tender has passed');
+  }
+
+  const bid = await Application.findOne({ tenderId: tender._id, applicant: req.user._id });
+  if (!bid) {
+    res.status(404);
+    throw new Error('No bid to submit');
+  }
+  if (bid.status !== 'draft') {
+    res.status(409);
+    throw new Error('This bid has already been submitted');
+  }
+
+  // Whatever the last screen changed comes with the submit, so the bidder is
+  // never told "saved" about one thing and "submitted" about another.
+  applyBidFields(bid, req.body);
+
+  /*
+    What a draft may lack and a submission may not. Checked here rather than on
+    the schema so a half-finished bid can still be saved.
+  */
+  const missing = [];
+  if (!String(bid.contactName || '').trim()) missing.push('contactName');
+  if (!String(bid.contactEmail || '').trim()) missing.push('contactEmail');
+  if (!String(bid.proposalSummary || '').trim()) missing.push('proposalSummary');
+  if (!bid.lineItems.length) missing.push('lineItems');
+  if (!bid.documents.some((d) => d.slot === 'technical')) missing.push('technicalDocument');
+  if (bid.hasExceptions && !String(bid.exceptionsNote || '').trim()) missing.push('exceptionsNote');
+
+  if (missing.length) {
+    res.status(400);
+    throw new Error(`This bid is not ready to submit: ${missing.join(', ')}`);
+  }
+
+  bid.status = 'submitted';
+  bid.submittedAt = new Date();
+  bid.history.push({ from: 'draft', to: 'submitted', by: req.user._id });
+  await bid.save();
+
+  res.json({ success: true, data: bid });
+});
+
+/**
+ * Loads the caller's own editable bid, or fails the request explaining why.
+ *
+ * Both document routes need the same three answers — does the bid exist, is it
+ * the caller's, and is it still a draft — and getting any of them wrong on one
+ * route and not the other is exactly how a submitted bid ends up quietly
+ * changing. So they ask once, here.
+ */
+async function ownEditableBid(req, res) {
+  const bid = await Application.findOne({
+    tenderId: req.params.tenderId,
+    applicant: req.user._id
+  });
+  if (!bid) {
+    res.status(404);
+    throw new Error('Save the bid before attaching files to it');
+  }
+  if (bid.status !== 'draft') {
+    res.status(409);
+    throw new Error('This bid has already been submitted and can no longer be edited');
+  }
+  return bid;
+}
+
+// @desc  Attach a file to the caller's draft bid
+// @route POST /api/applications/tender/:tenderId/documents/:slot
+const uploadBidDocument = asyncHandler(async (req, res) => {
+  const { slot } = req.params;
+  if (!BID_SLOTS[slot]) {
+    res.status(400);
+    throw new Error(`Unknown bid document slot '${slot}'`);
+  }
+  if (!req.file) {
+    res.status(400);
+    throw new Error('No file received');
+  }
+
+  const bid = await ownEditableBid(req, res);
+  const meta = await persistDocument(req.file, slot, 'bids');
+  meta.uploadedBy = req.user._id;
+
+  /*
+    One file per slot: re-uploading replaces. A tender asks for *the* technical
+    proposal, and leaving two in place would leave the buyer to guess which the
+    bidder meant.
+  */
+  const previous = bid.documents.find((d) => d.slot === slot && slot !== 'other');
+  if (previous) bid.documents.pull(previous._id);
+  bid.documents.push(meta);
+  await bid.save();
+
+  // The old file goes only once the record that pointed at it is saved, so a
+  // failed save never leaves the bid referencing a file that is gone.
+  if (previous) await removeStoredFile(previous.storedName, 'bids');
+
+  res.status(201).json({ success: true, data: bid });
+});
+
+// @desc  Download a file attached to a bid
+// @route GET /api/applications/tender/:tenderId/documents/:docId
+const downloadBidDocument = asyncHandler(async (req, res) => {
+  const bid = await Application.findOne({ tenderId: req.params.tenderId }).select('+documents');
+  const doc = bid?.documents.id(req.params.docId);
+  if (!bid || !doc) {
+    res.status(404);
+    throw new Error('Document not found');
+  }
+
+  /*
+    A bid's files are commercially sensitive: they are the supplier's prices and
+    method. Only the bidder who uploaded them and programme staff may read them,
+    never another bidder on the same tender.
+  */
+  const owns = String(bid.applicant) === String(req.user._id);
+  if (!owns && !isStaff(req.user)) {
+    res.status(403);
+    throw new Error('Not authorised to read this document');
+  }
+
+  res.download(resolveStoredPath(doc.storedName, 'bids'), doc.originalName);
+});
+
+// @desc  Remove a file from the caller's draft bid
+// @route DELETE /api/applications/tender/:tenderId/documents/:docId
+const deleteBidDocument = asyncHandler(async (req, res) => {
+  const bid = await ownEditableBid(req, res);
+  const doc = bid.documents.id(req.params.docId);
+  if (!doc) {
+    res.status(404);
+    throw new Error('Document not found');
+  }
+
+  const { storedName } = doc;
+  bid.documents.pull(doc._id);
+  await bid.save();
+  await removeStoredFile(storedName, 'bids');
+
+  res.json({ success: true, data: bid });
+});
+
+// @desc  The caller's own bid on a tender, draft included
+// @route GET /api/applications/tender/:tenderId/mine
+const getMyBid = asyncHandler(async (req, res) => {
+  const bid = await Application.findOne({
+    tenderId: req.params.tenderId,
+    applicant: req.user._id
+  });
+  res.json({ success: true, data: bid || null });
+});
+
 module.exports = {
+  saveDraft,
+  submitBid,
+  getMyBid,
+  uploadBidDocument,
+  downloadBidDocument,
+  deleteBidDocument,
   listApplications,
   getApplication,
   createApplication,

@@ -30,35 +30,55 @@ beforeEach(() => {
 });
 
 describe('Registration type is shown but not selectable', () => {
-  test('a merchant account sees the merchant type marked current', () => {
-    renderWith(<RegistrationHeader isMerchant />);
-    const group = screen.getByRole('group');
-    const current = within(group)
-      .getAllByText(/merchant|organisation/i)
+  const currentIn = (group) =>
+    within(group)
+      .getAllByText(/merchant|organisation|self-employed/i)
       .find((el) => el.closest('[aria-current="true"]'));
-    expect(current).toHaveTextContent(/merchant/i);
+
+  test('a merchant account sees the merchant type marked current', () => {
+    renderWith(<RegistrationHeader entityType="merchant" />);
+    expect(currentIn(screen.getByRole('group'))).toHaveTextContent(/merchant/i);
   });
 
   test('an organisation account sees the organisation type marked current', () => {
-    renderWith(<RegistrationHeader isMerchant={false} />);
+    renderWith(<RegistrationHeader entityType="organization" />);
+    expect(currentIn(screen.getByRole('group'))).toHaveTextContent(/organisation/i);
+  });
+
+  test('a self-employed account sees its own type marked current', () => {
+    renderWith(<RegistrationHeader entityType="freelance" />);
+    expect(currentIn(screen.getByRole('group'))).toHaveTextContent(/self-employed/i);
+  });
+
+  test('all three types are offered, and exactly one is current', () => {
+    /*
+      The header used to take an `isMerchant` boolean, which can only describe
+      two types. Self-employment made that a third, so the prop is the type
+      itself — a boolean would have needed a second flag and a pair of states
+      that can both be false.
+    */
+    renderWith(<RegistrationHeader entityType="freelance" />);
     const group = screen.getByRole('group');
-    const current = within(group)
-      .getAllByText(/merchant|organisation/i)
-      .find((el) => el.closest('[aria-current="true"]'));
-    expect(current).toHaveTextContent(/organisation/i);
+    expect(within(group).getAllByText(/merchant|organisation|self-employed/i)).toHaveLength(3);
+    expect(group.querySelectorAll('[aria-current="true"]')).toHaveLength(1);
   });
 
   test('neither type is an interactive control', () => {
     // The server derives the type from the account and ignores the client, so
     // a clickable tab here would be either inert or a hole in that boundary.
-    const { container } = renderWith(<RegistrationHeader isMerchant />);
+    const { container } = renderWith(<RegistrationHeader entityType="merchant" />);
     const group = screen.getByRole('group');
     expect(within(group).queryAllByRole('button')).toHaveLength(0);
     expect(container.querySelectorAll('input, select')).toHaveLength(0);
   });
 
+  test('but they are buttons while the type is still a real choice', () => {
+    renderWith(<RegistrationHeader entityType="merchant" onSelect={() => {}} />);
+    expect(within(screen.getByRole('group')).getAllByRole('button')).toHaveLength(3);
+  });
+
   test('says why the type cannot be changed', () => {
-    renderWith(<RegistrationHeader isMerchant />);
+    renderWith(<RegistrationHeader entityType="merchant" />);
     expect(screen.getAllByText(/cannot be changed/i).length).toBeGreaterThan(0);
   });
 });

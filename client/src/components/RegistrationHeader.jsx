@@ -15,14 +15,20 @@ import { useLanguage } from '../context/LanguageContext';
  *     decoration the server overrides, or would need that boundary removed — so
  *     the type that does not apply is locked, with the reason stated.
  */
-export default function RegistrationHeader({ isMerchant, onSelect, title, subtitle }) {
+export default function RegistrationHeader({ entityType, onSelect, title, subtitle }) {
   const { t } = useLanguage();
   const selectable = typeof onSelect === 'function';
 
+  /*
+    Three types now, not two. This used to take an `isMerchant` boolean, which
+    could only ever describe two — adding self-employment to a boolean would
+    have meant a second flag and a pair of states that can both be true.
+  */
   const types = [
-    { id: 'merchant', label: t('reg.merchant'), active: isMerchant },
-    { id: 'organization', label: t('reg.organization'), active: !isMerchant }
-  ];
+    { id: 'merchant', label: t('reg.merchant') },
+    { id: 'organization', label: t('reg.organization') },
+    { id: 'freelance', label: t('reg.freelance') }
+  ].map((x) => ({ ...x, active: x.id === entityType }));
 
   return (
     <header className="relative overflow-hidden rounded-t-4xl border border-b-0 border-rule bg-wash-hero px-6 pb-8 pt-9 sm:px-11">
@@ -40,10 +46,24 @@ export default function RegistrationHeader({ isMerchant, onSelect, title, subtit
         </span>
         <div>
           <h1 className="font-display text-[1.75rem] font-black leading-tight text-navy-900 sm:text-[2.1rem]">
-            {title || (isMerchant ? t('reg.titleMerchant') : t('reg.titleOrganization'))}
+            {title ||
+              t(
+                {
+                  merchant: 'reg.titleMerchant',
+                  organization: 'reg.titleOrganization',
+                  freelance: 'reg.titleFreelance'
+                }[entityType]
+              )}
           </h1>
           <p className="mt-1.5 text-sm text-ink-muted">
-            {subtitle || (isMerchant ? t('reg.subtitleMerchant') : t('reg.subtitleOrganization'))}
+            {subtitle ||
+              t(
+                {
+                  merchant: 'reg.subtitleMerchant',
+                  organization: 'reg.subtitleOrganization',
+                  freelance: 'reg.subtitleFreelance'
+                }[entityType]
+              )}
           </p>
         </div>
       </div>

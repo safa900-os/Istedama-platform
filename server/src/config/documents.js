@@ -7,8 +7,9 @@
  * from here, so a slot cannot be accepted by one layer and unknown to another.
  *
  * The set comes from the registration forms on the legacy site — eight slots
- * for a merchant, three for an organisation — with the two shared by both
- * (`logo`, `other`) collapsed into single entries.
+ * for a merchant, three for an organisation, four for a self-employed
+ * registrant — with those shared between types (`logo`, `other`, `riyada`)
+ * collapsed into single entries.
  */
 
 /** Accepted types, keyed by the token used in a slot's `accept` list. */
@@ -45,7 +46,15 @@ const MIME_ALIASES = {
 
 const MERCHANT = 'merchant';
 const ORGANIZATION = 'organization';
+const FREELANCE = 'freelance';
 const BOTH = [MERCHANT, ORGANIZATION];
+/*
+  A self-employed registrant holds a freelance permit, not a commercial
+  registration, so `cr` and `chamber` do not apply to them at all — asking for
+  a document they cannot legally possess would block the whole form. What they
+  do hold is the permit itself, and optionally an e-commerce licence.
+*/
+const ALL = [MERCHANT, ORGANIZATION, FREELANCE];
 
 const DOCUMENT_SLOTS = {
   cr: {
@@ -64,10 +73,26 @@ const DOCUMENT_SLOTS = {
     }
   },
   riyada: {
-    entityTypes: [MERCHANT],
+    // Riyada backs self-employed practitioners as well as small firms.
+    entityTypes: [MERCHANT, FREELANCE],
     required: false,
     accept: ['pdf', 'jpg', 'png'],
     label: { en: 'Riyada card', ar: 'بطاقة ريادة' }
+  },
+  freelancePermit: {
+    entityTypes: [FREELANCE],
+    required: true,
+    accept: ['pdf', 'jpg', 'png'],
+    label: { en: 'Self-employment permit', ar: 'سجل العمل الحر' }
+  },
+  ecommerceLicence: {
+    entityTypes: [FREELANCE],
+    required: false,
+    accept: ['pdf', 'jpg', 'png'],
+    label: {
+      en: 'E-commerce licence',
+      ar: 'ترخيص التجارة الإلكترونية'
+    }
   },
   socialInsurance: {
     entityTypes: [MERCHANT],
@@ -100,13 +125,13 @@ const DOCUMENT_SLOTS = {
     label: { en: 'Proof of registration', ar: 'إثبات التسجيل' }
   },
   logo: {
-    entityTypes: BOTH,
+    entityTypes: ALL,
     required: false,
     accept: ['jpg', 'png'],
     label: { en: 'Organisation logo', ar: 'شعار المؤسسة' }
   },
   other: {
-    entityTypes: BOTH,
+    entityTypes: ALL,
     required: false,
     accept: ['pdf', 'jpg', 'png'],
     label: { en: 'Other', ar: 'أخرى' }
@@ -151,6 +176,7 @@ module.exports = {
   SLOT_KEYS,
   MERCHANT,
   ORGANIZATION,
+  FREELANCE,
   slotsFor,
   requiredSlotsFor,
   typeFromMime,

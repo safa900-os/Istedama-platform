@@ -58,9 +58,17 @@
     @apply btn bg-navy-700 text-white shadow-pill hover:bg-navy-800
            hover:shadow-lift active:scale-[0.98];
   }
-  /* The single orange action on a page — never more than one per view */
+  /*
+    The single orange action on a page — never more than one per view.
+
+    The label is navy, not white. The logo orange is a light colour: white text
+    on it reaches 2.2:1, well under the 4.5:1 a button label needs, and reads as
+    a washed-out smudge on a phone outdoors. Navy on the same orange is 6.6:1,
+    and hovering to the lighter accent-400 raises it to 8:1 rather than dropping
+    it, so the button never gets harder to read as you interact with it.
+  */
   .btn-accent {
-    @apply btn bg-accent-500 text-white shadow-pill hover:bg-accent-600
+    @apply btn bg-accent-500 text-navy-900 shadow-pill hover:bg-accent-400
            hover:shadow-lift active:scale-[0.98];
   }
   .btn-quiet {
@@ -91,7 +99,8 @@
   /* ---- status pills -------------------------------------------------- */
   .pill { @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold; }
   .pill-ok    { @apply pill bg-teal-50 text-teal-700; }
-  .pill-wait  { @apply pill bg-gold-500 text-white; }
+  /* Navy on the logo orange, for the same reason as .btn-accent above. */
+  .pill-wait  { @apply pill bg-gold-500 text-navy-900; }
   .pill-info  { @apply pill bg-navy-50 text-navy-700; }
   .pill-muted { @apply pill bg-rule text-ink-muted; }
 

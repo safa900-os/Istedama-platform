@@ -4,13 +4,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   CheckCircle2, ArrowLeft, ArrowRight, Eye, EyeOff, Check, X,
   UserRound, Mail, Phone, Lock, Building2, Hash, MapPin, Scale, Tags, Globe,
-  Landmark, CreditCard, CalendarDays, IdCard, Users
+  Landmark, CreditCard, CalendarDays, IdCard, Users, Briefcase, BadgeCheck
 } from 'lucide-react';
 import api from '../api/axios';
 import RegistrationHeader from '../components/RegistrationHeader';
 import StepTrack from '../components/StepTrack';
 import NdaAgreement from '../components/NdaAgreement';
 import DocumentChecklist from '../components/DocumentChecklist';
+import BankAccounts, { emptyAccount } from '../components/BankAccounts';
+import CategoryPicker from '../components/CategoryPicker';
 import LocationPicker from '../components/LocationPicker';
 import Field from '../components/ui/Field';
 import AnimatedCheckbox from '../components/ui/AnimatedCheckbox';
@@ -46,7 +48,6 @@ import { EASE } from '../motion/presets';
  */
 
 const BANKS = ['بنك مسقط', 'البنك الوطني العماني', 'صحار الدولي', 'بنك ظفار'];
-const CATEGORIES = ['contracting', 'it', 'supplies', 'consulting'];
 const ORG_TYPES = ['waqf', 'association', 'civil', 'nonprofit'];
 const IBAN_RE = /^OM\d{2}[A-Z0-9]{3,30}$/i;
 const PHONE_RE = /^\+?[\d\s-]{8,15}$/;
@@ -60,11 +61,19 @@ const INITIAL = {
   sector: '', registrationDate: '',
   employeeCount: '', omaniEmployeeCount: '', location: null,
   // Bank
+  // Merchants hold a list; the freelance journey keeps the single-account
+  // fields below, because a permit covers one person with one account.
+  bankAccounts: [{ ...emptyAccount(), isPrimary: true }],
+  serviceCategories: [],
   bankName: '', accountHolder: '', accountNumber: '', confirmAccountNumber: '', iban: '',
   // Organisation
   description: '', organizationType: '', registrationExpiry: '', proofExpiry: '',
   representativeName: '', representativeNationalId: '',
-  representativeEmail: '', representativePhone: ''
+  representativeEmail: '', representativePhone: '',
+  // Self-employment
+  civilNumber: '', profession: '', specialisation: '',
+  freelancePermitNo: '', ecommerceLicenceNo: '',
+  storeUrl: '', socialUrl: '', maroofUrl: ''
 };
 
 export default function Register() {
@@ -89,19 +98,35 @@ export default function Register() {
   const [success, setSuccess] = useState(null);
 
   const isMerchant = entityType === 'merchant';
+  const isFreelance = entityType === 'freelance';
+  const isOrganization = entityType === 'organization';
   const Next = isRTL ? ArrowLeft : ArrowRight;
   const Back = isRTL ? ArrowRight : ArrowLeft;
   // Declared after `steps` below; see `isLastStep`.
 
-  const steps = isMerchant
-    ? [t('rw.s.general'), t('rw.s.company'), t('rw.s.bank'), t('rw.s.documents'), t('rw.s.review')]
-    : [t('rw.s.orgDetails'), t('rw.s.representative'), t('rw.s.documents')];
-
-  const heading = isMerchant
-    ? ['general', 'company', 'bank', 'documents', 'review'][step]
-    : ['orgDetails', 'representative', 'documents'][step];
+  /*
+    Each type runs its own stages. Self-employment has four, matching the
+    permit-holder's journey: who they are and what they do, the permit and any
+    e-commerce licence, the bank account and the files, then the review.
+  */
+  const STAGES = {
+    merchant: ['general', 'company', 'bank', 'documents', 'review'],
+    organization: ['orgDetails', 'representative', 'documents'],
+    freelance: ['freelanceProfile', 'freelanceLicence', 'freelanceVerify', 'review']
+  };
+  const stageKeys = STAGES[entityType];
+  const steps = stageKeys.map((k) => t(`rw.s.${k}`));
+  const heading = stageKeys[step];
 
   const isLastStep = step === steps.length - 1;
+
+  /*
+    The account that gets paid. The list always carries exactly one primary —
+    the component and the server both hold to that — but the review must render
+    even mid-edit, so this falls back rather than reaching into index 0 blindly.
+  */
+  const primaryAccount =
+    form.bankAccounts.find((a) => a.isPrimary) || form.bankAccounts[0] || emptyAccount();
 
   const pwFailures = useMemo(() => passwordFailures(form.password), [form.password]);
 
@@ -148,16 +173,57 @@ export default function Register() {
     }
 
     if (isMerchant && step === 2) {
+      if (!form.bankAccounts.length) e.bankAccounts = t('form.errOneAccount');
+      /*
+        Every account is checked, not only the primary one. A second account
+        left half-filled would be dropped by the server without a word, and the
+        merchant would believe they had registered it.
+      */
+      form.bankAccounts.forEach((a, i) => {
+        const at = (k, msg) => {
+          e[`bankAccounts.${i}.${k}`] = msg;
+        };
+        if (!a.bankName) at('bankName', t('form.errSelectBank'));
+        if (!a.accountHolder.trim()) at('accountHolder', t('form.errRequired'));
+        if (!a.accountNumber.trim()) at('accountNumber', t('form.errRequired'));
+        else if (a.accountNumber.trim() !== a.confirmAccountNumber.trim()) {
+          at('confirmAccountNumber', t('form.errAccountMismatch'));
+        }
+        if (!IBAN_RE.test(a.iban.trim())) at('iban', t('form.errorIban'));
+      });
+    }
+
+    /* --------------------------------------------- self-employment */
+
+    if (isFreelance && step === 0) {
+      if (form.fullName.trim().length < 2) e.fullName = t('form.errRequired');
+      if (!isValidEmail(form.email)) e.email = t('auth.errEmail');
+      if (!PHONE_RE.test(form.phone)) e.phone = t('form.errPhone');
+      // Eight digits, as the card is issued. Same rule as the server's.
+      if (!/^[0-9]{8}$/.test(form.civilNumber.trim())) {
+        e.civilNumber = t('form.errCivilNumber');
+      }
+      if (!form.profession.trim()) e.profession = t('form.errRequired');
+      if (!form.governorate) e.governorate = t('form.errSelectGovernorate');
+      if (pwFailures.length) e.password = t('auth.errPasswordWeak');
+    }
+
+    if (isFreelance && step === 1) {
+      if (!form.freelancePermitNo.trim()) e.freelancePermitNo = t('form.errRequired');
+      // The optional links are only checked when something was typed: an empty
+      // optional field is not an error, but a malformed one is.
+      for (const k of ['storeUrl', 'socialUrl', 'maroofUrl']) {
+        if (form[k] && !/^https?:\/\/\S+\.\S+/.test(form[k])) e[k] = t('form.errWebsite');
+      }
+    }
+
+    if (isFreelance && step === 2) {
       if (!form.bankName) e.bankName = t('form.errSelectBank');
       if (!form.accountHolder.trim()) e.accountHolder = t('form.errRequired');
-      if (!form.accountNumber.trim()) e.accountNumber = t('form.errRequired');
-      else if (form.accountNumber.trim() !== form.confirmAccountNumber.trim()) {
-        e.confirmAccountNumber = t('form.errAccountMismatch');
-      }
       if (!IBAN_RE.test(form.iban.trim())) e.iban = t('form.errorIban');
     }
 
-    if (!isMerchant && step === 0) {
+    if (isOrganization && step === 0) {
       if (!form.companyName.trim()) e.companyName = t('form.errRequired');
       if (!form.companyNameAr.trim()) e.companyNameAr = t('form.errRequired');
       if (!form.description.trim()) e.description = t('form.errRequired');
@@ -168,7 +234,7 @@ export default function Register() {
       Object.assign(e, assessmentErrors());
     }
 
-    if (!isMerchant && step === 1) {
+    if (isOrganization && step === 1) {
       if (form.representativeName.trim().length < 2) e.representativeName = t('form.errRequired');
       if (!form.representativeNationalId.trim()) {
         e.representativeNationalId = t('form.errRequired');
@@ -227,12 +293,26 @@ export default function Register() {
       // 1. The account. The company row references its owner, so this has to
       //    exist first — and its token authorises everything after it.
       setNotice(t('rw.creatingAccount'));
+      /*
+        A merchant and a self-employed practitioner both sign up as themselves;
+        an organisation signs up through its representative. The role decides
+        the record type on the server, so it is the only thing that has to be
+        right here — the payload's own entityType is ignored there.
+      */
+      const personal = isOrganization
+        ? {
+            name: form.representativeName,
+            email: form.representativeEmail,
+            phone: form.representativePhone
+          }
+        : { name: form.fullName, email: form.email, phone: form.phone };
+
       await register({
-        name: isMerchant ? form.fullName : form.representativeName,
-        email: isMerchant ? form.email : form.representativeEmail,
+        ...personal,
         password: form.password,
-        phone: isMerchant ? form.phone : form.representativePhone,
-        role: isMerchant ? 'merchant' : 'sme_owner'
+        role: { merchant: 'merchant', freelance: 'freelancer', organization: 'sme_owner' }[
+          entityType
+        ]
       });
 
       // 2. The enterprise.
@@ -241,33 +321,59 @@ export default function Register() {
         companyName: form.companyName,
         companyNameAr: form.companyNameAr || undefined,
         entityType,
-        crNumber: form.crNumber,
+        // A self-employment permit is not a commercial registration; the
+        // server rejects the field for this type rather than storing a blank.
+        crNumber: isFreelance ? undefined : form.crNumber,
         governorate: form.governorate,
         sector: form.sector || undefined,
         registrationDate: form.registrationDate || undefined,
-        employeeCount: Number(form.employeeCount),
-        omaniEmployeeCount: Number(form.omaniEmployeeCount),
+        // A permit covers one person; the server sets these itself for the type.
+        employeeCount: isFreelance ? undefined : Number(form.employeeCount),
+        omaniEmployeeCount: isFreelance ? undefined : Number(form.omaniEmployeeCount),
         location: form.location,
-        contactEmail: (isMerchant ? form.email : form.representativeEmail) || undefined,
-        contactPhone: (isMerchant ? form.phone : form.representativePhone) || undefined,
+        contactEmail: personal.email || undefined,
+        contactPhone: personal.phone || undefined,
 
         legalForm: isMerchant ? form.legalForm || undefined : undefined,
         address: isMerchant ? form.address || undefined : undefined,
         website: isMerchant ? form.website || undefined : undefined,
-        category: isMerchant ? form.category || undefined : undefined,
+        serviceCategories: isOrganization ? undefined : form.serviceCategories,
         isSme: isMerchant ? form.isSme : undefined,
-        bankName: isMerchant ? form.bankName : undefined,
-        accountHolder: isMerchant ? form.accountHolder : undefined,
-        accountNumber: isMerchant ? form.accountNumber : undefined,
-        iban: isMerchant ? form.iban.toUpperCase() : undefined,
 
-        description: !isMerchant ? form.description : undefined,
-        organizationType: !isMerchant ? form.organizationType : undefined,
-        registrationExpiry: !isMerchant ? form.registrationExpiry : undefined,
-        proofExpiry: !isMerchant ? form.proofExpiry || undefined : undefined,
-        representativeName: !isMerchant ? form.representativeName : undefined,
-        representativeNationalId: !isMerchant ? form.representativeNationalId : undefined,
-        representativePhone: !isMerchant ? form.representativePhone : undefined,
+        /*
+          Whoever gets paid gives an account: a supplier and a practitioner both
+          do, the buyer does not. A merchant sends the list; a permit-holder
+          sends the single-account shape, which the server folds into a list of
+          one. `confirmAccountNumber` never leaves the browser — it exists to
+          catch a typo, not to be stored twice.
+        */
+        bankAccounts: isMerchant
+          ? form.bankAccounts.map(({ confirmAccountNumber, ...a }) => ({
+              ...a,
+              iban: a.iban.trim().toUpperCase()
+            }))
+          : undefined,
+        bankName: isFreelance ? form.bankName : undefined,
+        accountHolder: isFreelance ? form.accountHolder : undefined,
+        accountNumber: isFreelance ? form.accountNumber || undefined : undefined,
+        iban: isFreelance ? form.iban.toUpperCase() : undefined,
+
+        civilNumber: isFreelance ? form.civilNumber : undefined,
+        profession: isFreelance ? form.profession : undefined,
+        specialisation: isFreelance ? form.specialisation || undefined : undefined,
+        freelancePermitNo: isFreelance ? form.freelancePermitNo : undefined,
+        ecommerceLicenceNo: isFreelance ? form.ecommerceLicenceNo || undefined : undefined,
+        storeUrl: isFreelance ? form.storeUrl || undefined : undefined,
+        socialUrl: isFreelance ? form.socialUrl || undefined : undefined,
+        maroofUrl: isFreelance ? form.maroofUrl || undefined : undefined,
+
+        description: isOrganization ? form.description : undefined,
+        organizationType: isOrganization ? form.organizationType : undefined,
+        registrationExpiry: isOrganization ? form.registrationExpiry : undefined,
+        proofExpiry: isOrganization ? form.proofExpiry || undefined : undefined,
+        representativeName: isOrganization ? form.representativeName : undefined,
+        representativeNationalId: isOrganization ? form.representativeNationalId : undefined,
+        representativePhone: isOrganization ? form.representativePhone : undefined,
 
         ndaSignedAt
       });
@@ -361,10 +467,20 @@ export default function Register() {
   return (
     <div className="mx-auto max-w-4xl px-3 py-10 sm:px-6">
       <RegistrationHeader
-        isMerchant={isMerchant}
+        entityType={entityType}
         onSelect={switchType}
-        title={isMerchant ? t('reg.titleMerchant') : t('reg.titleOrganization')}
-        subtitle={isMerchant ? t('reg.subtitleMerchant') : t('reg.subtitleOrganization')}
+        title={t(
+          { merchant: 'reg.titleMerchant', organization: 'reg.titleOrganization', freelance: 'reg.titleFreelance' }[
+            entityType
+          ]
+        )}
+        subtitle={t(
+          {
+            merchant: 'reg.subtitleMerchant',
+            organization: 'reg.subtitleOrganization',
+            freelance: 'reg.subtitleFreelance'
+          }[entityType]
+        )}
       />
 
       <div className="rounded-b-4xl border border-rule bg-surface p-6 shadow-card sm:p-9">
@@ -467,14 +583,14 @@ export default function Register() {
                       label={t('form.website')} value={form.website}
                       onChange={update('website')} error={fieldErrors.website}
                     />
-                    <Field
-                      id="category" as="select" icon={Tags}
-                      label={t('form.category')} value={form.category}
-                      onChange={update('category')}
-                    >
-                      <option value="">{t('form.selectCategory')}</option>
-                      {CATEGORIES.map((c) => <option key={c} value={c}>{t(`category.${c}`)}</option>)}
-                    </Field>
+                    <CategoryPicker
+                      value={form.serviceCategories}
+                      hint={t('form.categoriesHint')}
+                      error={fieldErrors.serviceCategories}
+                      onChange={(serviceCategories) =>
+                        setForm((f) => ({ ...f, serviceCategories }))
+                      }
+                    />
                     <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-rule p-4 text-sm text-ink sm:col-span-2">
                       <input
                         type="checkbox" checked={form.isSme} onChange={update('isSme')}
@@ -489,48 +605,17 @@ export default function Register() {
 
               {/* ------------------------------ merchant 3 — bank */}
               {isMerchant && step === 2 && (
-                <div className="rounded-3xl border border-rule bg-surface p-5 shadow-soft sm:p-6">
-                  <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                    <h3 className="font-display text-base font-black text-navy-900">
-                      {t('form.bankAccountOne')}
-                    </h3>
-                    <span className="pill-info">{t('form.primaryAccount')}</span>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field
-                      id="bankName" as="select" icon={Landmark} required
-                      label={t('form.bankName')} value={form.bankName}
-                      onChange={update('bankName')} error={fieldErrors.bankName}
-                    >
-                      <option value="">{t('form.selectBank')}</option>
-                      {BANKS.map((b) => <option key={b} value={b}>{b}</option>)}
-                    </Field>
-                    <Field
-                      id="accountHolder" icon={UserRound} required
-                      label={t('form.accountHolder')} value={form.accountHolder}
-                      onChange={update('accountHolder')} error={fieldErrors.accountHolder}
-                    />
-                    <Field
-                      id="accountNumber" dir="ltr" icon={CreditCard} required className="font-mono"
-                      label={t('form.accountNumber')} value={form.accountNumber}
-                      onChange={update('accountNumber')} error={fieldErrors.accountNumber}
-                    />
-                    <Field
-                      id="confirmAccountNumber" dir="ltr" icon={CreditCard} required className="font-mono"
-                      // Pasting the same wrong number twice defeats the check.
-                      onPaste={(e) => e.preventDefault()}
-                      label={t('form.confirmAccountNumber')} value={form.confirmAccountNumber}
-                      onChange={update('confirmAccountNumber')} error={fieldErrors.confirmAccountNumber}
-                    />
-                    <Field
-                      id="iban" dir="ltr" icon={CreditCard} required
-                      className="font-mono sm:col-span-2" hint={t('form.ibanHint')}
-                      placeholder="OM12 0001 0000 0000 0000 000"
-                      label={t('form.iban')} value={form.iban}
-                      onChange={update('iban')} error={fieldErrors.iban}
-                    />
-                  </div>
-                </div>
+                <>
+                  <p className="mb-4 text-sm text-ink-muted">{t('form.primaryHint')}</p>
+                  <BankAccounts
+                    accounts={form.bankAccounts}
+                    onChange={(bankAccounts) => setForm((f) => ({ ...f, bankAccounts }))}
+                    errors={fieldErrors}
+                  />
+                  {fieldErrors.bankAccounts && (
+                    <p className="mt-3 text-sm font-medium text-red-600">{fieldErrors.bankAccounts}</p>
+                  )}
+                </>
               )}
 
               {/*
@@ -540,12 +625,144 @@ export default function Register() {
                 rendered above its own fields — so the form opened by asking for
                 paperwork before saying what it was for.
               */}
-              {((isMerchant && step === 3) || (!isMerchant && step === 2)) && (
+              {['documents', 'freelanceVerify'].includes(heading) && (
                 <DocumentChecklist entityType={entityType} files={docs} onChange={setDocs} />
               )}
 
+              {/* --------------------- self-employment 1 — who and what */}
+              {isFreelance && step === 0 && (
+                <>
+                  <div className={card}>
+                    <Field
+                      id="fullName" icon={UserRound} required autoComplete="name"
+                      label={t('rw.fullName')} value={form.fullName}
+                      onChange={update('fullName')} error={fieldErrors.fullName}
+                    />
+                    <Field
+                      id="civilNumber" icon={IdCard} required dir="ltr" inputMode="numeric"
+                      placeholder="12345678"
+                      label={t('form.civilNumber')} value={form.civilNumber}
+                      onChange={update('civilNumber')} error={fieldErrors.civilNumber}
+                    />
+                    <Field
+                      id="email" type="email" dir="ltr" icon={Mail} required autoComplete="email"
+                      label={t('auth.email')} value={form.email}
+                      onChange={update('email')} error={fieldErrors.email}
+                    />
+                    <Field
+                      id="phone" type="tel" dir="ltr" icon={Phone} required inputMode="numeric"
+                      placeholder="91234567" label={t('form.contactPhone')} value={form.phone}
+                      onChange={update('phone')} error={fieldErrors.phone}
+                    />
+                    <PasswordField
+                      {...{ form, update, showPw, setShowPw, pwFocused, setPwFocused, pwFailures, fieldErrors, t }}
+                    />
+                  </div>
+
+                  <div className={card}>
+                    <Field
+                      id="profession" icon={Briefcase} required
+                      label={t('form.profession')} hint={t('form.professionHint')}
+                      value={form.profession}
+                      onChange={update('profession')} error={fieldErrors.profession}
+                    />
+                    <Field
+                      id="specialisation" icon={Tags}
+                      label={t('form.specialisation')} hint={t('form.specialisationHint')}
+                      value={form.specialisation}
+                      onChange={update('specialisation')} error={fieldErrors.specialisation}
+                    />
+                    <Field
+                      id="governorate" as="select" icon={MapPin} required
+                      label={t('form.governorate')} value={form.governorate}
+                      onChange={update('governorate')} error={fieldErrors.governorate}
+                    >
+                      <option value="">{t('form.selectGovernorate')}</option>
+                      {GOVERNORATES.map((g) => (
+                        <option key={g} value={g}>{tGov(g)}</option>
+                      ))}
+                    </Field>
+                  </div>
+                </>
+              )}
+
+              {/* ------------------ self-employment 2 — permit and licence */}
+              {isFreelance && step === 1 && (
+                <>
+                  <div className={card}>
+                    <Field
+                      id="freelancePermitNo" icon={IdCard} required dir="ltr"
+                      label={t('form.freelancePermitNo')} hint={t('form.freelancePermitHint')}
+                      value={form.freelancePermitNo}
+                      onChange={update('freelancePermitNo')} error={fieldErrors.freelancePermitNo}
+                    />
+                    <Field
+                      id="ecommerceLicenceNo" icon={Hash} dir="ltr"
+                      label={t('form.ecommerceLicenceNo')} hint={t('form.ecommerceLicenceHint')}
+                      value={form.ecommerceLicenceNo}
+                      onChange={update('ecommerceLicenceNo')} error={fieldErrors.ecommerceLicenceNo}
+                    />
+                  </div>
+
+                  <div className={card}>
+                    <Field
+                      id="storeUrl" type="url" dir="ltr" icon={Globe}
+                      placeholder="https://" label={t('form.storeUrl')}
+                      value={form.storeUrl}
+                      onChange={update('storeUrl')} error={fieldErrors.storeUrl}
+                    />
+                    <Field
+                      id="socialUrl" type="url" dir="ltr" icon={Globe}
+                      placeholder="https://" label={t('form.socialUrl')}
+                      value={form.socialUrl}
+                      onChange={update('socialUrl')} error={fieldErrors.socialUrl}
+                    />
+                    <Field
+                      id="maroofUrl" type="url" dir="ltr" icon={BadgeCheck}
+                      placeholder="https://maroof.om/..." label={t('form.maroofUrl')}
+                      hint={t('form.maroofHint')}
+                      value={form.maroofUrl}
+                      onChange={update('maroofUrl')} error={fieldErrors.maroofUrl}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* --------------- self-employment 3 — where the money goes */}
+              {isFreelance && step === 2 && (
+                <div className={card}>
+                  {/*
+                    An IBAN, not a bare account number. Fees for freelance work
+                    are paid straight to the practitioner, and an IBAN is the
+                    only form that routes without a branch code.
+                  */}
+                  <Field
+                    id="bankName" as="select" icon={Landmark} required
+                    label={t('form.bankName')} value={form.bankName}
+                    onChange={update('bankName')} error={fieldErrors.bankName}
+                  >
+                    <option value="">{t('form.selectBank')}</option>
+                    {BANKS.map((b) => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </Field>
+                  <Field
+                    id="accountHolder" icon={UserRound} required
+                    label={t('form.accountHolder')} hint={t('form.accountHolderHint')}
+                    value={form.accountHolder}
+                    onChange={update('accountHolder')} error={fieldErrors.accountHolder}
+                  />
+                  <Field
+                    id="iban" icon={CreditCard} required dir="ltr"
+                    placeholder="OM81 0180 0000 0000 0000 000"
+                    label={t('form.iban')} value={form.iban}
+                    onChange={update('iban')} error={fieldErrors.iban}
+                  />
+                </div>
+              )}
+
               {/* ------------------------------ organisation 1 — details */}
-              {!isMerchant && step === 0 && (
+              {isOrganization && step === 0 && (
                 <>
                   <div className={card}>
                     <Field
@@ -609,7 +826,7 @@ export default function Register() {
               )}
 
               {/* ------------------------------ organisation 2 — representative */}
-              {!isMerchant && step === 1 && (
+              {isOrganization && step === 1 && (
                 <div className={card}>
                   <Field
                     id="representativeName" icon={UserRound} required autoComplete="name"
@@ -644,10 +861,34 @@ export default function Register() {
                 keeps its own review stage; the organisation no longer has one,
                 so it goes straight from its documents to the declaration below.
               */}
-              {isMerchant && step === 4 && (
+              {heading === 'review' && (
                 <>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {(isMerchant
+                    {(isFreelance
+                      ? [
+                          { title: t('rw.h.freelanceProfile.title'), rows: [
+                            [t('rw.fullName'), form.fullName],
+                            [t('form.civilNumber'), form.civilNumber, 'ltr'],
+                            [t('auth.email'), form.email, 'ltr'],
+                            [t('form.contactPhone'), form.phone, 'ltr']
+                          ] },
+                          { title: t('rw.h.freelanceLicence.title'), rows: [
+                            [t('form.profession'), form.profession],
+                            [t('form.freelancePermitNo'), form.freelancePermitNo, 'ltr'],
+                            [t('form.ecommerceLicenceNo'), form.ecommerceLicenceNo, 'ltr'],
+                            [t('form.maroofUrl'), form.maroofUrl, 'ltr']
+                          ] },
+                          { title: t('rw.h.freelanceVerify.title'), rows: [
+                            [t('form.bankName'), form.bankName],
+                            [t('form.accountHolder'), form.accountHolder],
+                            [t('form.iban'), form.iban, 'ltr']
+                          ] },
+                          { title: t('form.verificationStatus'), rows: [
+                            [t('form.emailAndPhone'), t('form.pendingVerification')],
+                            [t('form.freelancePermitNo'), t('form.underReview')]
+                          ] }
+                        ]
+                      : isMerchant
                       ? [
                           { title: t('rw.h.general.title'), rows: [
                             [t('rw.fullName'), form.fullName],
@@ -660,9 +901,14 @@ export default function Register() {
                             [t('form.governorate'), tGov(form.governorate)]
                           ] },
                           { title: t('rw.h.bank.title'), rows: [
-                            [t('form.bankName'), form.bankName],
-                            [t('form.accountHolder'), form.accountHolder],
-                            [t('form.accountNumber'), form.accountNumber, 'ltr']
+                            // The account that gets paid, plus how many others
+                            // are on file — the review is a check, not a dump.
+                            [t('form.primaryAccount'), primaryAccount.bankName],
+                            [t('form.accountHolder'), primaryAccount.accountHolder],
+                            [t('form.accountNumber'), primaryAccount.accountNumber, 'ltr'],
+                            ...(form.bankAccounts.length > 1
+                              ? [[t('form.addAccount'), fmt(form.bankAccounts.length - 1)]]
+                              : [])
                           ] },
                           { title: t('form.verificationStatus'), rows: [
                             [t('form.emailAndPhone'), t('form.pendingVerification')],

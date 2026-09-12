@@ -57,8 +57,20 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  /*
+    `whitespace-nowrap` is the whole fix. The bar was not overflowing — it had
+    49px to spare — but each link is a flex item that may shrink below its
+    content, and every two-word Arabic label («عن استدامة», «العمل الحر»,
+    «تواصل معنا») broke at its space and took a second line. Three items at
+    56px tall in a 36px row is what made the bar look ragged.
+
+    Padding comes down from 14px to 10px a side to pay for the width the
+    unbroken labels now need. The type stays at 14px: this platform's members
+    include merchants in their sixties, and shrinking the navigation is the
+    last place to find room.
+  */
   const linkCls = ({ isActive }) =>
-    `relative rounded-full px-3.5 py-2 text-sm transition-colors ${
+    `relative whitespace-nowrap rounded-full px-2.5 py-2 text-sm transition-colors ${
       isActive ? 'font-bold text-navy-700' : 'font-medium text-ink-muted hover:text-navy-700'
     }`;
 
@@ -107,7 +119,7 @@ export default function Navbar() {
               type="button"
               onClick={() => setServicesOpen((o) => !o)}
               aria-expanded={servicesOpen}
-              className="flex items-center gap-1 rounded-full px-3.5 py-2 text-sm font-medium text-ink-muted transition-colors hover:text-navy-700"
+              className="flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-2 text-sm font-medium text-ink-muted transition-colors hover:text-navy-700"
             >
               {t('nav.services')}
               <motion.span animate={{ rotate: servicesOpen ? 180 : 0 }} transition={{ duration: 0.25 }}>
@@ -135,7 +147,7 @@ export default function Navbar() {
                         to={s.to}
                         onClick={() => setServicesOpen(false)}
                         className={({ isActive }) =>
-                          `block rounded-xl px-3.5 py-2.5 text-sm transition-colors ${
+                          `block whitespace-nowrap rounded-xl px-3.5 py-2.5 text-sm transition-colors ${
                             isActive ? 'bg-navy-50 font-bold text-navy-700' : 'text-ink-muted hover:bg-mist hover:text-navy-700'
                           }`
                         }
@@ -184,16 +196,25 @@ export default function Navbar() {
               type="button"
               onClick={logout}
               whileTap={{ scale: 0.97 }}
-              className="hidden items-center gap-1.5 rounded-full border border-rule px-4 py-2 text-sm font-bold text-ink transition-colors hover:bg-mist sm:flex"
+              className="hidden items-center gap-1.5 whitespace-nowrap rounded-full border border-rule px-4 py-2 text-sm font-bold text-ink transition-colors hover:bg-mist sm:flex"
             >
-              <LogOut size={15} /> {user.name.split(' ')[0]}
+              {/*
+                Capped at 88px and truncated. Signed in, the bar carries nine
+                nav items and has 36px to spare at its narrowest, and this is
+                the one width left that comes from the user rather than from
+                us. 88px clears «عبدالرحمن» — about the longest Arabic first
+                name — uncut, while capping the growth this button can add at
+                25px, inside that 36px.
+              */}
+              <LogOut size={15} aria-hidden="true" />
+              <span className="max-w-[5.5rem] truncate">{user.name.split(' ')[0]}</span>
             </motion.button>
           ) : (
             <>
-              <Link to="/login" className="hidden rounded-full bg-navy-700 px-5 py-2.5 text-sm font-bold text-white shadow-pill transition-all hover:bg-navy-800 hover:shadow-lift sm:inline-flex">
+              <Link to="/login" className="hidden whitespace-nowrap rounded-full bg-navy-700 px-4 py-2.5 text-sm font-bold text-white shadow-pill transition-all hover:bg-navy-800 hover:shadow-lift sm:inline-flex">
                 {t('nav.enter')}
               </Link>
-              <Link to="/register" className="hidden rounded-full border border-rule px-5 py-2.5 text-sm font-bold text-navy-700 transition-colors hover:bg-navy-50 lg:inline-flex">
+              <Link to="/register" className="hidden whitespace-nowrap rounded-full border border-rule px-4 py-2.5 text-sm font-bold text-navy-700 transition-colors hover:bg-navy-50 lg:inline-flex">
                 {t('nav.signIn')}
               </Link>
             </>

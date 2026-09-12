@@ -19,12 +19,30 @@ const {
   deleteDocument
 } = require('../controllers/documentController');
 
+const { CATEGORIES, CATEGORY_KEYS, MAX_CATEGORIES } = require('../config/categories');
+
 const router = express.Router();
 
 const companyValidation = [
   body('companyName').trim().notEmpty().withMessage('Company name is required'),
   body('companyNameAr').optional({ values: 'falsy' }).trim(),
-  body('entityType').optional().isIn(['organization', 'merchant']).withMessage('Unknown registration type'),
+  body('entityType').optional().isIn(['organization', 'merchant', 'freelance'])
+    .withMessage('Unknown registration type'),
+
+  /*
+    Banking arrives either as a list of accounts or as the four flat fields the
+    form used before it could hold more than one. Both are validated; the
+    controller folds the flat shape into a single primary account.
+  */
+  body('bankAccounts').optional().isArray({ max: 5 })
+    .withMessage('A record may hold at most 5 bank accounts'),
+  body('bankAccounts.*.bankName').optional({ values: 'falsy' }).trim().isLength({ max: 120 }),
+  body('bankAccounts.*.accountHolder').optional({ values: 'falsy' }).trim().isLength({ max: 150 }),
+  body('bankAccounts.*.accountNumber').optional({ values: 'falsy' }).trim().isLength({ max: 40 }),
+  body('bankAccounts.*.iban').optional({ values: 'falsy' }).trim()
+    .matches(/^OM\d{2}[A-Z0-9]{3,30}$/i).withMessage('IBAN must be a valid Omani IBAN'),
+  body('bankAccounts.*.isPrimary').optional().isBoolean(),
+
   body('bankName').optional({ values: 'falsy' }).trim(),
   body('accountHolder').optional({ values: 'falsy' }).trim(),
   body('iban').optional({ values: 'falsy' }).trim()
@@ -48,6 +66,9 @@ const companyValidation = [
   body('category').optional({ values: 'falsy' })
     .isIn(['contracting', 'it', 'supplies', 'consulting']).withMessage('Unknown category'),
   body('isSme').optional().isBoolean().withMessage('isSme must be true or false'),
+  body('serviceCategories').optional().isArray({ max: MAX_CATEGORIES })
+    .withMessage(`Choose at most ${MAX_CATEGORIES} categories`),
+  body('serviceCategories.*').optional().isIn(CATEGORY_KEYS).withMessage('Unknown category'),
   body('accountNumber').optional({ values: 'falsy' }).trim().isLength({ max: 40 }),
 
   // Organisation details.
@@ -72,6 +93,16 @@ const companyValidation = [
 router.get('/stats/overview', getOverviewStats);
 // Declared before '/:id' so a literal segment is never read as an id.
 router.get('/documents/catalogue', getCatalogue);
+
+/*
+  The category vocabulary, in both languages. Public and declared before '/:id'
+  so 'categories' is never read as a company id. The form reads it from here
+  rather than holding its own copy, so the list the registrant picks from and
+  the list the server validates against cannot drift apart.
+*/
+router.get('/categories', (req, res) => {
+  res.json({ success: true, data: { categories: CATEGORIES, max: MAX_CATEGORIES } });
+});
 router.get('/', getCompanies);
 router.get('/:id', getCompanyById);
 router.post('/', protect, companyValidation, validate, createCompany);

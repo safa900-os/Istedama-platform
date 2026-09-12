@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { CATEGORY_KEYS, MAX_CATEGORIES } = require('../config/categories');
 const { SLOT_KEYS, requiredSlotsFor } = require('../config/documents');
 
 const OMANI_GOVERNORATES = [
@@ -37,6 +38,37 @@ const documentSchema = new mongoose.Schema(
   { _id: true }
 );
 
+/**
+ * One bank account a merchant or practitioner is paid into.
+ *
+ * Held as a list rather than four fields on the company because a supplier
+ * genuinely has more than one: a rial account for local contracts and a foreign
+ * currency account for imports is the ordinary case, not an edge one. Exactly
+ * one is marked primary — that is the account the platform pays by default, and
+ * "which one do we pay?" must have a single answer at every moment.
+ */
+const bankAccountSchema = new mongoose.Schema(
+  {
+    bankName: { type: String, required: true, trim: true, maxlength: 120 },
+    accountHolder: { type: String, required: true, trim: true, maxlength: 150 },
+    accountNumber: { type: String, trim: true, default: '', maxlength: 40 },
+    iban: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true,
+      validate: {
+        validator: (v) => /^OM\d{2}[A-Z0-9]{3,30}$/.test(v),
+        message: 'IBAN must be a valid Omani IBAN starting with OM'
+      }
+    },
+    // Which account gets paid. The hook below guarantees exactly one is set.
+    isPrimary: { type: Boolean, default: false },
+    label: { type: String, trim: true, default: '', maxlength: 60 }
+  },
+  { _id: true }
+);
+
 const companySchema = new mongoose.Schema(
   {
     companyName: {
@@ -48,8 +80,23 @@ const companySchema = new mongoose.Schema(
     },
     crNumber: {
       type: String,
-      required: [true, 'Commercial Registration (CR) number is required'],
-      unique: true,
+      /*
+        A self-employment permit is not a commercial registration, and a
+        practitioner holding one has no CR number to give.
+
+        The index is sparse for the same reason. A plain unique index treats a
+        missing field as null and indexes it, so the first self-employed record
+        would save and the second would collide on null — the whole type would
+        be limited to one registrant. Sparse indexes only the documents that
+        actually carry a CR, which is exactly the set the uniqueness is about.
+      */
+      required: [
+        function () {
+          return this.entityType !== 'freelance';
+        },
+        'Commercial Registration (CR) number is required'
+      ],
+      index: { unique: true, sparse: true },
       trim: true,
       match: [/^[0-9]{4,10}$/, 'CR number must be 4-10 digits']
     },
@@ -64,21 +111,23 @@ const companySchema = new mongoose.Schema(
     // The extra banking block is only collected for merchants.
     entityType: {
       type: String,
-      enum: ['organization', 'merchant'],
+      enum: ['organization', 'merchant', 'freelance'],
       default: 'organization'
     },
-    bankName: { type: String, trim: true, default: '' },
-    iban: {
-      type: String,
-      trim: true,
-      uppercase: true,
-      default: '',
+    /*
+      The accounts this supplier is paid into. `bankName`, `iban`,
+      `accountHolder` and `accountNumber` still read off the primary account as
+      virtuals, so everything written against the single-account shape keeps
+      working — but the stored truth is the list.
+    */
+    bankAccounts: {
+      type: [bankAccountSchema],
+      default: [],
       validate: {
-        validator: (v) => !v || /^OM\d{2}[A-Z0-9]{3,30}$/.test(v),
-        message: 'IBAN must be a valid Omani IBAN starting with OM'
+        validator: (v) => !v || v.length <= 5,
+        message: 'A record may hold at most 5 bank accounts'
       }
     },
-    accountHolder: { type: String, trim: true, default: '' },
     companyNameAr: {
       type: String,
       trim: true,
@@ -108,12 +157,34 @@ const companySchema = new mongoose.Schema(
     },
     employeeCount: {
       type: Number,
-      required: true,
+      /*
+        Required of a firm, not of a person. A self-employment permit covers
+        one individual working alone: demanding a staff count there would make
+        the form unfillable, and defaulting it to 1 keeps the Omanization
+        virtual arithmetic sound without inventing employees.
+      */
+      required: [
+        function () {
+          return this.entityType !== 'freelance';
+        },
+        'A company must state its employee count'
+      ],
+      default: function () {
+        return this.entityType === 'freelance' ? 1 : undefined;
+      },
       min: [1, 'A company must have at least 1 employee']
     },
     omaniEmployeeCount: {
       type: Number,
-      required: true,
+      required: [
+        function () {
+          return this.entityType !== 'freelance';
+        },
+        'A company must state its Omani employee count'
+      ],
+      default: function () {
+        return this.entityType === 'freelance' ? 1 : undefined;
+      },
       min: 0,
       validate: {
         validator: function (v) {
@@ -122,6 +193,61 @@ const companySchema = new mongoose.Schema(
         message: 'Omani employee count cannot exceed total employee count'
       }
     },
+    /*
+      Self-employment.
+
+      These are inert on a merchant or an organisation record and are only
+      collected — and only validated — when entityType is 'freelance'. They sit
+      on the same collection rather than in one of their own because everything
+      downstream (documents, tenders, bids, the directory) already keys off a
+      company id, and a parallel collection would have to be threaded through
+      all of it for no gain.
+    */
+    civilNumber: {
+      type: String,
+      trim: true,
+      default: '',
+      validate: {
+        validator(v) {
+          // Eight digits, as issued. Empty is allowed for the other types.
+          return !v || /^[0-9]{8}$/.test(v);
+        },
+        message: 'The civil number is eight digits'
+      }
+    },
+    profession: { type: String, trim: true, default: '' },
+    professionAr: { type: String, trim: true, default: '' },
+    specialisation: { type: String, trim: true, default: '' },
+    specialisationAr: { type: String, trim: true, default: '' },
+    /* Product and service categories, shared with the merchant form. */
+    /*
+      What this business sells, from the controlled list in config/categories.
+      Validated against it rather than taken as free text, because these are
+      what a buyer filters the directory by — and "IT", "I.T." and
+      "Information Technology" are three answers to one question, none of
+      which a filter finds.
+    */
+    serviceCategories: {
+      type: [String],
+      default: [],
+      validate: [
+        {
+          validator: (v) => !v || v.length <= MAX_CATEGORIES,
+          message: `Choose at most ${MAX_CATEGORIES} categories`
+        },
+        {
+          validator: (v) => !v || v.every((c) => CATEGORY_KEYS.includes(c)),
+          message: 'Unknown category'
+        }
+      ]
+    },
+    freelancePermitNo: { type: String, trim: true, default: '' },
+    /* Issued by the Ministry of Commerce, Industry and Investment Promotion. */
+    ecommerceLicenceNo: { type: String, trim: true, default: '' },
+    storeUrl: { type: String, trim: true, default: '' },
+    socialUrl: { type: String, trim: true, default: '' },
+    /* Verification on Oman's Maroof platform, held as the published link. */
+    maroofUrl: { type: String, trim: true, default: '' },
     hasRiyadaCard: {
       type: Boolean,
       default: false
@@ -163,8 +289,6 @@ const companySchema = new mongoose.Schema(
     },
     // Self-declared at registration; the assessment verifies it separately.
     isSme: { type: Boolean, default: false },
-    // Held alongside the IBAN because the registration form collects both.
-    accountNumber: { type: String, trim: true, default: '', maxlength: 40 },
 
     /* --------------------------------------------- organisation details */
 
@@ -225,6 +349,45 @@ companySchema.virtual('missingDocuments').get(function () {
 companySchema.virtual('documentsComplete').get(function () {
   return this.missingDocuments.length === 0;
 });
+
+/*
+  Exactly one primary account, always.
+
+  Enforced here rather than trusted from the request, because "which account do
+  we pay?" cannot have two answers or none. A list with no primary gets one
+  — the first, which for a form that adds accounts in order is the one the
+  supplier entered first. A list with several keeps the first and clears the
+  rest, so a client that marks two never silently decides which wins.
+*/
+companySchema.pre('validate', function onePrimaryAccount(next) {
+  const accounts = this.bankAccounts || [];
+  if (accounts.length) {
+    const firstMarked = accounts.findIndex((a) => a.isPrimary);
+    const primary = firstMarked === -1 ? 0 : firstMarked;
+    accounts.forEach((a, i) => {
+      a.isPrimary = i === primary;
+    });
+  }
+  next();
+});
+
+/*
+  The single-account shape, still readable.
+
+  Everything written before accounts became a list — the directory, exports, the
+  registration review screen — asks a company for `iban` and expects a string.
+  These keep that true by answering with the primary account, so the change is
+  invisible to every reader and explicit only to the code that manages accounts.
+*/
+companySchema.virtual('primaryBankAccount').get(function () {
+  return (this.bankAccounts || []).find((a) => a.isPrimary) || null;
+});
+
+for (const field of ['bankName', 'iban', 'accountHolder', 'accountNumber']) {
+  companySchema.virtual(field).get(function () {
+    return this.primaryBankAccount?.[field] || '';
+  });
+}
 
 companySchema.set('toJSON', { virtuals: true });
 companySchema.set('toObject', { virtuals: true });

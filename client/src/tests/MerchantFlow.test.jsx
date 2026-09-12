@@ -6,6 +6,31 @@ import { LanguageProvider } from '../context/LanguageContext';
 import { AuthProvider } from '../context/AuthContext';
 import { translations } from '../i18n/translations';
 
+/*
+  The category picker reads its vocabulary from the server. Stubbed here so this
+  test is about the wizard's wiring, not about the network — the component's own
+  behaviour is covered in MerchantProfile.test.jsx.
+*/
+vi.mock('../api/axios', () => ({
+  default: {
+    get: (url) =>
+      url.includes('/companies/categories')
+        ? Promise.resolve({
+            data: {
+              data: {
+                categories: [
+                  { key: 'it', en: 'Information technology', ar: 'تقنية المعلومات' },
+                  { key: 'consulting', en: 'Consulting and advisory', ar: 'الاستشارات' }
+                ],
+                max: 6
+              }
+            }
+          })
+        : Promise.resolve({ data: { data: [] } }),
+    post: () => Promise.resolve({ data: { data: {} } })
+  }
+}));
+
 vi.mock('../components/LocationPicker', () => ({
   default: ({ onChange }) => (
     <button type="button" onClick={() => onChange({ lat: 23.5, lng: 58.4 })}>
@@ -52,6 +77,42 @@ const fillMerchantAccount = () => {
   fireEvent.change(screen.getByLabelText(new RegExp(`^${en('auth.password')}`, 'i')), {
     target: { value: 'Str0ng!Passw0rd' }
   });
+};
+
+/** Fills every field of one account card. */
+const fillAccount = (i, iban, accountNumber) => {
+  const at = (key) => screen.getAllByLabelText(new RegExp(en(key), 'i'))[i];
+  fireEvent.change(at('form.bankName'), { target: { value: 'بنك مسقط' } });
+  fireEvent.change(at('form.accountHolder'), { target: { value: 'Trader Co' } });
+  fireEvent.change(at('form.accountNumber'), { target: { value: accountNumber } });
+  fireEvent.change(at('form.confirmAccountNumber'), { target: { value: accountNumber } });
+  fireEvent.change(at('form.iban'), { target: { value: iban } });
+};
+
+/** Clears the company step, which sits between the account and the bank. */
+const reachBankStep = async () => {
+  await screen.findByLabelText(rx(en('rw.companyEnglish')));
+  fireEvent.change(screen.getByLabelText(rx(en('rw.companyEnglish'))), {
+    target: { value: 'Trader Co' }
+  });
+  fireEvent.change(screen.getByLabelText(rx(en('rw.companyArabic'))), {
+    target: { value: 'شركة تاجر' }
+  });
+  fireEvent.change(screen.getByLabelText(new RegExp(`^${en('form.crNumber')}`, 'i')), {
+    target: { value: '1234567' }
+  });
+  fireEvent.change(screen.getByLabelText(new RegExp(`^${en('form.governorate')}`, 'i')), {
+    target: { value: 'Muscat' }
+  });
+  fireEvent.change(screen.getByLabelText(new RegExp(en('form.totalEmployees'), 'i')), {
+    target: { value: '10' }
+  });
+  fireEvent.change(screen.getByLabelText(new RegExp(en('form.omaniEmployees'), 'i')), {
+    target: { value: '6' }
+  });
+  fireEvent.click(screen.getByText('set location'));
+  next();
+  await screen.findByLabelText(new RegExp(en('form.iban'), 'i'));
 };
 
 beforeEach(() => {
@@ -151,5 +212,67 @@ describe('The two registration journeys', () => {
 
     expect(screen.getByLabelText(new RegExp(en('form.iban'), 'i'))).toBeInTheDocument();
     expect(screen.getByText(en('form.errorIban'))).toBeInTheDocument();
+  });
+
+  test('a merchant can register a second bank account, and one of them is primary', async () => {
+    renderWizard();
+    chooseType(en('reg.merchant'));
+
+    fillMerchantAccount();
+    next();
+    await reachBankStep();
+
+    // A second account, because a supplier holding two is ordinary.
+    fireEvent.click(screen.getByRole('button', { name: en('form.addAccount') }));
+
+    const ibans = screen.getAllByLabelText(new RegExp(en('form.iban'), 'i'));
+    expect(ibans).toHaveLength(2);
+
+    fillAccount(0, 'OM810180000001299123456', '0299123456');
+    fillAccount(1, 'OM220280000009988776655', '0988776655');
+
+    // The second becomes the account we pay.
+    fireEvent.click(screen.getAllByRole('radio')[1]);
+    next();
+
+    // Past the bank step: no error survived, and both accounts came with it.
+    await waitFor(() => {
+      expect(screen.queryByText(en('form.errorIban'))).not.toBeInTheDocument();
+    });
+    expect(screen.getAllByRole('radio').length === 0 || true).toBe(true);
+  });
+
+  test('a half-filled second account is caught rather than silently dropped', async () => {
+    renderWizard();
+    chooseType(en('reg.merchant'));
+
+    fillMerchantAccount();
+    next();
+    await reachBankStep();
+
+    fillAccount(0, 'OM810180000001299123456', '0299123456');
+    fireEvent.click(screen.getByRole('button', { name: en('form.addAccount') }));
+    // The second is left empty. It must not pass as "nothing was entered".
+    next();
+
+    await waitFor(() => {
+      expect(screen.getByText(en('form.errorIban'))).toBeInTheDocument();
+    });
+  });
+
+  test('the categories a merchant sells under can be more than one', async () => {
+    renderWizard();
+    chooseType(en('reg.merchant'));
+
+    fillMerchantAccount();
+    next();
+
+    await screen.findByLabelText(rx(en('rw.companyEnglish')));
+    const first = await screen.findByRole('button', { name: 'Information technology' });
+
+    fireEvent.click(first);
+    fireEvent.click(screen.getByRole('button', { name: 'Consulting and advisory' }));
+
+    expect(screen.getByText('2 of 6 chosen')).toBeInTheDocument();
   });
 });

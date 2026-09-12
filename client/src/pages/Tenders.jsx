@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, MapPin, FileText, ArrowLeft, ArrowRight } from 'lucide-react';
 import api from '../api/axios';
@@ -123,9 +124,16 @@ export default function Tenders() {
 
                   <div className="mt-5 flex items-center justify-between gap-3 border-t border-rule pt-4">
                     <span className={`pill ${STATUS_CLASS[tender.status]}`}>{t(STATUS_KEY[tender.status])}</span>
-                    <motion.button whileHover={{ x: isRTL ? -3 : 3 }} className="flex items-center gap-1.5 text-sm font-bold text-navy-700">
-                      {t('tenders.viewDetails')} <Arrow size={14} />
-                    </motion.button>
+                    <Link
+                      to={`/tenders/${tender._id}`}
+                      className="group flex items-center gap-1.5 text-sm font-bold text-navy-700 hover:text-navy-900"
+                    >
+                      {t('tenders.viewDetails')}
+                      <Arrow
+                        size={14}
+                        className={`transition-transform ${isRTL ? 'group-hover:-translate-x-1' : 'group-hover:translate-x-1'}`}
+                      />
+                    </Link>
                   </div>
                 </MotionCard>
               ))}

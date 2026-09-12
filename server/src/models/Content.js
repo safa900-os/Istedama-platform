@@ -32,7 +32,107 @@ const tenderSchema = new mongoose.Schema(
       enum: ['open', 'evaluating', 'awarded', 'closed'],
       default: 'open'
     },
-    documentsRequired: { type: Boolean, default: false }
+    documentsRequired: { type: Boolean, default: false },
+
+    /* ------------------------------------------------ what a bidder needs
+
+      Everything below is what a supplier has to read before they can price
+      the work. It is held on the tender rather than buried in an attached PDF
+      so the terms are the same for every bidder, are searchable, and can be
+      shown in both languages. A tender created without it still renders: each
+      field defaults to empty and its section is simply not drawn.
+    */
+
+    /** Contract period in days, from award. */
+    durationDays: { type: Number, min: 0, default: 0 },
+
+    /*
+      How the bids will be scored, published up front. Weights are percentages;
+      a buyer who states them cannot re-weight the criteria after seeing the
+      prices.
+    */
+    evaluationCriteria: {
+      type: [
+        new mongoose.Schema(
+          {
+            label: { type: String, required: true, trim: true },
+            labelAr: { type: String, trim: true, default: '' },
+            weight: { type: Number, required: true, min: 0, max: 100 }
+          },
+          { _id: false }
+        )
+      ],
+      default: [],
+      validate: {
+        validator(list) {
+          // Either the buyer publishes a complete scoring scheme or none at
+          // all. A partial one that sums to 70 tells a bidder nothing about
+          // where the other 30 went.
+          if (!list.length) return true;
+          return list.reduce((sum, c) => sum + c.weight, 0) === 100;
+        },
+        message: 'Evaluation weights must add up to 100'
+      }
+    },
+
+    /** Delivery stages, in order. */
+    phases: {
+      type: [
+        new mongoose.Schema(
+          {
+            name: { type: String, required: true, trim: true },
+            nameAr: { type: String, trim: true, default: '' },
+            durationDays: { type: Number, min: 0, default: 0 }
+          },
+          { _id: false }
+        )
+      ],
+      default: []
+    },
+
+    /*
+      Local content and sustainability conditions — Omanisation, local sourcing,
+      waste handling. These are the programme's reason for existing, so they are
+      a first-class field on the tender rather than a line in the description.
+    */
+    requirements: {
+      type: [
+        new mongoose.Schema(
+          {
+            text: { type: String, required: true, trim: true, maxlength: 400 },
+            textAr: { type: String, trim: true, default: '', maxlength: 400 },
+            kind: {
+              type: String,
+              enum: ['local_content', 'sustainability', 'technical', 'other'],
+              default: 'other'
+            }
+          },
+          { _id: false }
+        )
+      ],
+      default: []
+    },
+
+    /*
+      The bill of quantities the bidder prices. The buyer sets the scope and the
+      quantities; the bidder supplies only the rates. Fixing the lines here is
+      what makes two bids comparable — otherwise each supplier prices a
+      different job and the cheapest total wins by omitting work.
+    */
+    scopeItems: {
+      type: [
+        new mongoose.Schema(
+          {
+            description: { type: String, required: true, trim: true, maxlength: 300 },
+            descriptionAr: { type: String, trim: true, default: '', maxlength: 300 },
+            unit: { type: String, trim: true, default: '' },
+            quantity: { type: Number, min: 0, default: 1 }
+          },
+          { _id: false }
+        )
+      ],
+      default: []
+    }
   },
   { timestamps: true }
 );

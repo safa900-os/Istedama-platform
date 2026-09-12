@@ -20,7 +20,30 @@ const tenders = [
     location: 'Muscat', locationAr: 'مسقط',
     description: 'Scope covers server maintenance, network hardening and a twelve-month support agreement.',
     descriptionAr: 'يشمل النطاق صيانة الخوادم وتأمين الشبكة واتفاقية دعم فني لمدة اثني عشر شهراً.',
-    closingDate: new Date('2026-09-14')
+    closingDate: daysFromNow(9),
+    durationDays: 365,
+    evaluationCriteria: [
+      { label: 'Price', labelAr: 'السعر', weight: 40 },
+      { label: 'Technical capability', labelAr: 'القدرة الفنية', weight: 35 },
+      { label: 'Local content', labelAr: 'المحتوى المحلي', weight: 15 },
+      { label: 'Delivery schedule', labelAr: 'الجدول الزمني', weight: 10 }
+    ],
+    phases: [
+      { name: 'Survey and assessment', nameAr: 'المسح والتقييم', durationDays: 21 },
+      { name: 'Upgrade and migration', nameAr: 'التحديث والترحيل', durationDays: 60 },
+      { name: 'Support year', nameAr: 'سنة الدعم الفني', durationDays: 284 }
+    ],
+    requirements: [
+      { kind: 'local_content', text: 'At least 60% of the delivery team to be Omani nationals.', textAr: 'ألا يقل عدد العُمانيين في فريق التنفيذ عن ٦٠٪.' },
+      { kind: 'sustainability', text: 'Replaced hardware to be handed to a licensed e-waste recycler, with certificates.', textAr: 'تسليم الأجهزة المستبدلة إلى جهة مرخّصة لإعادة تدوير النفايات الإلكترونية مع شهادات الإتلاف.' },
+      { kind: 'technical', text: 'Response within four working hours for critical incidents.', textAr: 'الاستجابة خلال أربع ساعات عمل للأعطال الحرجة.' }
+    ],
+    scopeItems: [
+      { description: 'Server maintenance visit', descriptionAr: 'زيارة صيانة للخوادم', unit: 'visit', quantity: 12 },
+      { description: 'Network switch replacement', descriptionAr: 'استبدال مبدّل شبكة', unit: 'unit', quantity: 8 },
+      { description: 'Firewall configuration and hardening', descriptionAr: 'إعداد وتأمين الجدار الناري', unit: 'lot', quantity: 1 },
+      { description: 'On-call support', descriptionAr: 'الدعم الفني تحت الطلب', unit: 'month', quantity: 12 }
+    ]
   },
   {
     refNo: 13, category: 'supply', status: 'open', documentsRequired: true,
@@ -30,7 +53,29 @@ const tenders = [
     location: 'Sohar', locationAr: 'صحار',
     description: 'Supply and installation of workstations, meeting-room displays and networked printers.',
     descriptionAr: 'توريد وتركيب محطات العمل وشاشات قاعات الاجتماعات والطابعات الشبكية.',
-    closingDate: new Date('2026-09-19')
+    closingDate: daysFromNow(14),
+    durationDays: 90,
+    evaluationCriteria: [
+      { label: 'Price', labelAr: 'السعر', weight: 50 },
+      { label: 'Specification match', labelAr: 'مطابقة المواصفات', weight: 25 },
+      { label: 'Warranty and after-sales', labelAr: 'الضمان وخدمات ما بعد البيع', weight: 15 },
+      { label: 'Local content', labelAr: 'المحتوى المحلي', weight: 10 }
+    ],
+    phases: [
+      { name: 'Supply and delivery', nameAr: 'التوريد والتسليم', durationDays: 45 },
+      { name: 'Installation and handover', nameAr: 'التركيب والتسليم النهائي', durationDays: 45 }
+    ],
+    requirements: [
+      { kind: 'sustainability', text: 'Displays and printers to carry a recognised energy-efficiency rating.', textAr: 'أن تحمل الشاشات والطابعات تصنيفاً معتمداً لكفاءة الطاقة.' },
+      { kind: 'sustainability', text: 'Packaging to be removed from site and recycled by the supplier.', textAr: 'على المورّد رفع مواد التغليف من الموقع وإعادة تدويرها.' },
+      { kind: 'local_content', text: 'Installation and after-sales service to be delivered by an Omani-registered entity.', textAr: 'أن يتم التركيب وخدمات ما بعد البيع عبر كيان مسجّل في سلطنة عُمان.' }
+    ],
+    scopeItems: [
+      { description: 'Workstation, desk and chair', descriptionAr: 'محطة عمل مع مكتب وكرسي', unit: 'set', quantity: 45 },
+      { description: 'Meeting-room display, 75 inch', descriptionAr: 'شاشة قاعة اجتماعات ٧٥ بوصة', unit: 'unit', quantity: 6 },
+      { description: 'Networked multifunction printer', descriptionAr: 'طابعة شبكية متعددة الوظائف', unit: 'unit', quantity: 9 },
+      { description: 'Installation and cabling', descriptionAr: 'التركيب والتمديدات', unit: 'lot', quantity: 1 }
+    ]
   },
   {
     refNo: 14, category: 'consulting', status: 'open', documentsRequired: false,
@@ -40,7 +85,7 @@ const tenders = [
     location: 'Remote', locationAr: 'عن بُعد',
     description: 'Twelve advisory sessions covering ICV improvement, Omanization planning and financial reporting.',
     descriptionAr: 'اثنتا عشرة جلسة استشارية تغطي تحسين القيمة المحلية وتخطيط التعمين وإعداد التقارير المالية.',
-    closingDate: new Date('2026-09-22')
+    closingDate: daysFromNow(21)
   },
   {
     refNo: 15, category: 'construction', status: 'evaluating', documentsRequired: true,
@@ -50,7 +95,7 @@ const tenders = [
     location: 'Salalah', locationAr: 'صلالة',
     description: 'Interior fit-out for a 40-seat training hall including acoustic treatment.',
     descriptionAr: 'تجهيز داخلي لقاعة تدريب بسعة ٤٠ مقعداً يشمل المعالجة الصوتية.',
-    closingDate: new Date('2026-08-30')
+    closingDate: daysAgo(5)
   },
   {
     refNo: 16, category: 'technology', status: 'open', documentsRequired: false,
@@ -60,11 +105,11 @@ const tenders = [
     location: 'Muscat', locationAr: 'مسقط',
     description: 'Build an interactive map classifying enterprises across commercial zones.',
     descriptionAr: 'بناء خريطة تفاعلية لتصنيف المنشآت ضمن المناطق التجارية.',
-    closingDate: new Date('2026-10-05')
+    closingDate: daysFromNow(30)
   },
   {
     refNo: 17, category: 'supply', status: 'open', documentsRequired: true,
-    title: 'Supply of solar panels for a agritech greenhouse project',
+    title: 'Supply of solar panels for an agritech greenhouse project',
     titleAr: 'توريد ألواح شمسية لمشروع بيوت محمية زراعية',
     orgName: 'Nabta Green Agritech LLC', orgNameAr: 'شركة نبتة الخضراء للتقنيات الزراعية ش.م.م',
     location: 'Nizwa', locationAr: 'نزوى',

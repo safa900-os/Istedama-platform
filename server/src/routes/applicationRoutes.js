@@ -5,6 +5,7 @@ const { protect } = require('../middleware/auth');
 const Application = require('../models/Application');
 const c = require('../controllers/applicationController');
 
+const { receiveBidDocument } = require('../middleware/upload');
 const router = express.Router();
 
 // Applying to a tender is never anonymous, so the whole router requires a
@@ -12,6 +13,41 @@ const router = express.Router();
 router.use(protect);
 
 router.get('/stats', c.getApplicationStats);
+
+/*
+  The bid routes are addressed by tender, not by bid id: a bidder has at most
+  one bid per tender and does not know its id before the first save. They are
+  declared before '/:id' so 'tender' is never read as an application id.
+*/
+router.get('/tender/:tenderId/mine', c.getMyBid);
+
+router.put(
+  '/tender/:tenderId/draft',
+  [
+    body('validityDays').optional().isInt({ min: 1, max: 365 })
+      .withMessage('Bid validity is between 1 and 365 days'),
+    body('vatRate').optional().isFloat({ min: 0, max: 100 }).withMessage('Unknown VAT rate'),
+    body('lineItems').optional().isArray({ max: 200 })
+      .withMessage('A bill of quantities may hold at most 200 lines'),
+    body('lineItems.*.quantity').optional().isFloat({ min: 0 })
+      .withMessage('A quantity cannot be negative'),
+    body('lineItems.*.unitPrice').optional().isFloat({ min: 0 })
+      .withMessage('A unit price cannot be negative')
+  ],
+  validate,
+  c.saveDraft
+);
+
+router.post('/tender/:tenderId/submit', c.submitBid);
+
+router.post(
+  '/tender/:tenderId/documents/:slot',
+  receiveBidDocument,
+  c.uploadBidDocument
+);
+router.get('/tender/:tenderId/documents/:docId', c.downloadBidDocument);
+router.delete('/tender/:tenderId/documents/:docId', c.deleteBidDocument);
+
 router.get('/', c.listApplications);
 router.get('/:id', c.getApplication);
 

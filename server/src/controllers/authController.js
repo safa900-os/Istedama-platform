@@ -54,8 +54,9 @@ const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password, role, accountType, phone } = req.body;
 
   // Defence in depth: even if the route validator were bypassed, a visitor
-  // can never register themselves as an auditor or administrator.
-  const SELF_SERVICE_ROLES = ['sme_owner', 'merchant'];
+  // can never register themselves as an auditor or administrator. Those two
+  // roles are provisioned internally.
+  const SELF_SERVICE_ROLES = ['sme_owner', 'merchant', 'freelancer'];
   const safeRole = SELF_SERVICE_ROLES.includes(role) ? role : 'sme_owner';
 
   const exists = await User.findOne({ email });
@@ -64,7 +65,14 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new Error('An account with this email already exists');
   }
 
-  const user = await User.create({ name, email, password, role: safeRole });
+  const user = await User.create({ name, email, password, role: safeRole, accountType, phone });
+
+  /*
+    The code goes out before the response does, so an account never exists in
+    an unverifiable state: if issuing throws, registration fails and the caller
+    retries rather than being handed a token for an address nothing can reach.
+  */
+  const issued = await issueCode(user.email);
 
   res.status(201).json({
     success: true,

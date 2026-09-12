@@ -65,8 +65,25 @@ describe('Verification codes', () => {
 });
 
 describe('Application lifecycle', () => {
-  test('a new application starts as submitted', () => {
-    expect(Application.STATUSES[0]).toBe('submitted');
+  test('a bid starts as a draft, before it is a commitment', () => {
+    // A bid is long — files, a bill of quantities, pricing — so it can be
+    // saved half-finished. Submitting is the act that commits to it.
+    expect(Application.STATUSES[0]).toBe('draft');
+  });
+
+  test('a draft may be submitted or abandoned, and nothing else', () => {
+    expect(Application.canTransition('draft', 'submitted')).toBe(true);
+    expect(Application.canTransition('draft', 'withdrawn')).toBe(true);
+    // A draft the buyer has never seen cannot be shortlisted or accepted.
+    for (const target of ['under_review', 'shortlisted', 'accepted', 'rejected']) {
+      expect(Application.canTransition('draft', target)).toBe(false);
+    }
+  });
+
+  test('and nothing falls back into draft once submitted', () => {
+    for (const from of Application.STATUSES.filter((x) => x !== 'draft')) {
+      expect(Application.canTransition(from, 'draft')).toBe(false);
+    }
   });
 
   test('permitted moves follow the documented lifecycle', () => {
