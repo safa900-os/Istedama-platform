@@ -18,7 +18,7 @@ const { Tender, Facility, Booking, Advertisement, Discount, NewsPost } = require
  *   2. The last remaining active admin cannot be demoted or removed.
  */
 
-const ASSIGNABLE_ROLES = ['sme_owner', 'merchant', 'auditor', 'admin'];
+const ASSIGNABLE_ROLES = ['sme_owner', 'merchant', 'freelancer', 'auditor', 'admin'];
 
 const publicUser = (u) => ({
   _id: u._id,
@@ -202,6 +202,66 @@ const getOverview = asyncHandler(async (req, res) => {
 
 // @desc  Approve or reject a pending advertising request
 // @route PATCH /api/admin/advertisements/:id/status
+/* ------------------------------------------------- registration review
+
+  A registration is reviewed by a person before the applicant may trade. These
+  three endpoints are that review: the queue, the approval, and the rejection.
+
+  They are deliberately not one `PATCH /:id/status` taking any value. Approving
+  and rejecting are different acts with different obligations — a rejection owes
+  the applicant a reason — and collapsing them into one endpoint that trusts a
+  string is how a rejection ends up stored with no explanation.
+*/
+
+/** Every registration awaiting a decision, oldest first — a queue, not a list. */
+const listRegistrations = asyncHandler(async (req, res) => {
+  const { status = 'submitted', entityType } = req.query;
+
+  const filter = {};
+  if (status !== 'all') filter.registrationStatus = status;
+  if (entityType) filter.entityType = entityType;
+
+  const registrations = await Company.find(filter)
+    .select('companyName companyNameAr crNumber entityType governorate registrationStatus submittedAt reviewedAt rejectionReason documents owner')
+    .populate('owner', 'name email phone role')
+    .sort({ submittedAt: 1 });
+
+  res.json({ success: true, count: registrations.length, data: registrations });
+});
+
+/** Moves a registration through its lifecycle, refusing any jump it does not allow. */
+async function transition(req, res, to, extra = {}) {
+  const company = await Company.findById(req.params.id);
+  if (!company) {
+    res.status(404);
+    throw new Error('Registration not found');
+  }
+
+  const allowed = Company.REGISTRATION_TRANSITIONS[company.registrationStatus] || [];
+  if (!allowed.includes(to)) {
+    res.status(409);
+    throw new Error(
+      `A registration that is ${company.registrationStatus} cannot become ${to}`
+    );
+  }
+
+  company.registrationStatus = to;
+  company.reviewedAt = new Date();
+  company.reviewedBy = req.user._id;
+  Object.assign(company, extra);
+  await company.save();
+
+  res.json({ success: true, data: company });
+}
+
+const approveRegistration = asyncHandler((req, res) => transition(req, res, 'approved'));
+
+const rejectRegistration = asyncHandler((req, res) =>
+  transition(req, res, 'rejected', { rejectionReason: String(req.body.reason || '').trim() })
+);
+
+const reviewRegistration = asyncHandler((req, res) => transition(req, res, 'under_review'));
+
 const moderateAdvertisement = asyncHandler(async (req, res) => {
   const { status } = req.body;
   if (!['approved', 'rejected', 'pending'].includes(status)) {
@@ -245,6 +305,10 @@ const moderateBooking = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  listRegistrations,
+  approveRegistration,
+  rejectRegistration,
+  reviewRegistration,
   ASSIGNABLE_ROLES,
   listUsers,
   updateUserRole,

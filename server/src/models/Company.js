@@ -309,11 +309,64 @@ const companySchema = new mongoose.Schema(
     representativeNationalId: { type: String, trim: true, default: '', maxlength: 30 },
     representativePhone: { type: String, trim: true, default: '' },
 
-    /* ------------------------------------------------------ agreements */
+    /* ------------------------------------------------- review and status
+
+      A registration is a claim, not a fact. Somebody says they hold a
+      commercial registration, that the bank account is theirs, that the
+      documents are current — and none of that is verifiable by the form that
+      collected it. So a record arrives as `submitted` and only becomes
+      `approved` when a person on the programme team has read it.
+
+      This is the gate everything else hangs on: an unapproved merchant may
+      finish registering and sign in, but may not bid, and an unapproved
+      institution may not publish a tender. Without it the platform would let
+      an unchecked party into a procurement process, which is the one thing a
+      procurement platform exists to prevent.
+    */
+    registrationStatus: {
+      type: String,
+      enum: ['draft', 'submitted', 'under_review', 'approved', 'rejected'],
+      default: 'submitted',
+      index: true
+    },
+
+    /*
+      Required to reject, and only then. A rejection with no reason gives the
+      applicant nothing to correct, which turns a review into a dead end.
+    */
+    rejectionReason: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+      default: '',
+      validate: {
+        validator(v) {
+          return this.registrationStatus !== 'rejected' || (v && v.trim().length > 0);
+        },
+        message: 'A rejected registration must say why'
+      }
+    },
+
+    reviewedAt: { type: Date, default: null },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    submittedAt: { type: Date, default: null },
+
+    /* ------------------------------------------------------ agreements
+
+      Timestamps rather than booleans. "They agreed" is not the useful fact;
+      "they agreed at this moment, to what was published then" is what an audit
+      asks for later.
+    */
 
     // When the NDA was signed. Null means it was not, and the record should
     // not have been accepted — see the route validation.
     ndaSignedAt: { type: Date, default: null },
+
+    /** Acceptance of the platform's terms and conditions. */
+    termsAcceptedAt: { type: Date, default: null },
+
+    /** An institution's acknowledgement that it operates under Omani law. */
+    omanLawAckAt: { type: Date, default: null },
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
@@ -389,6 +442,50 @@ for (const field of ['bankName', 'iban', 'accountHolder', 'accountNumber']) {
   });
 }
 
+/**
+ * Who may move a registration into each state.
+ *
+ * Kept beside the schema so the controller cannot invent a transition. A
+ * rejected applicant may fix their record and resubmit — that is the point of
+ * giving them a reason — so `rejected` is not a terminal state, unlike an
+ * approval, which is withdrawn by deactivating the account rather than by
+ * quietly reverting the review.
+ */
+const REGISTRATION_TRANSITIONS = Object.freeze({
+  draft: ['submitted'],
+  submitted: ['under_review', 'approved', 'rejected'],
+  under_review: ['approved', 'rejected'],
+  approved: [],
+  rejected: ['submitted']
+});
+
+companySchema.statics.REGISTRATION_TRANSITIONS = REGISTRATION_TRANSITIONS;
+
+/** Whether this record may take part in procurement. */
+companySchema.virtual('isApproved').get(function () {
+  return this.registrationStatus === 'approved';
+});
+
+/*
+  Stamps the moment a registration was submitted, and clears a stale rejection
+  reason when it is resubmitted, so the applicant is never shown last round's
+  complaint against this round's record.
+*/
+companySchema.pre('validate', function stampRegistration(next) {
+  if (this.isModified('registrationStatus') || this.isNew) {
+    if (this.registrationStatus === 'submitted') {
+      this.submittedAt = this.submittedAt || new Date();
+      this.rejectionReason = '';
+      this.reviewedAt = null;
+      this.reviewedBy = null;
+    }
+    if (this.registrationStatus === 'approved') {
+      this.rejectionReason = '';
+    }
+  }
+  next();
+});
+
 companySchema.set('toJSON', { virtuals: true });
 companySchema.set('toObject', { virtuals: true });
 
@@ -396,3 +493,4 @@ companySchema.index({ companyName: 'text', crNumber: 'text' });
 
 module.exports = mongoose.model('Company', companySchema);
 module.exports.OMANI_GOVERNORATES = OMANI_GOVERNORATES;
+module.exports.REGISTRATION_TRANSITIONS = REGISTRATION_TRANSITIONS;
