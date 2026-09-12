@@ -238,6 +238,40 @@ async function destroyData() {
   process.exit(0);
 }
 
+/**
+ * Whether this run may create the demo accounts.
+ *
+ * Keyed on the database being written to, not on NODE_ENV.
+ *
+ * The earlier rule asked whether *this process* was production. It was not —
+ * a laptop never is — so seeding a live Atlas cluster from a developer machine
+ * sailed straight past the check and published an admin login whose password is
+ * in this file. The environment of the machine running the seed says nothing
+ * about whose data is at the other end of the connection.
+ *
+ * So: a local database may have demo accounts, anything else may not unless
+ * somebody says so out loud with ALLOW_DEMO_ACCOUNTS=true.
+ */
+function targetsLocalDatabase() {
+  const uri = process.env.MONGO_URI || '';
+  // No URI at all means the default, which is local.
+  if (!uri) return true;
+  try {
+    // mongodb+srv://... always resolves to a hosted cluster.
+    const host = new URL(uri.replace(/^mongodb(\+srv)?:/, 'http:')).hostname;
+    return ['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(host);
+  } catch {
+    // An unparseable URI is not something to assume is local.
+    return false;
+  }
+}
+
+function demoAccountsAllowed() {
+  if (process.env.ALLOW_DEMO_ACCOUNTS === 'true') return true;
+  if (process.env.ALLOW_DEMO_ACCOUNTS === 'false') return false;
+  return targetsLocalDatabase();
+}
+
 async function importData() {
   await connectDB();
   await Promise.all([Company.deleteMany(), Evaluation.deleteMany()]);
@@ -255,8 +289,7 @@ async function importData() {
     Everything else the seed writes — companies, evaluations, facilities, news
     — is ordinary demo content and still loads.
   */
-  const demoAllowed =
-    process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEMO_ACCOUNTS === 'true';
+  const demoAllowed = demoAccountsAllowed();
 
   const DEMO_USERS = [
     { name: 'Istidamah Platform Admin', email: 'admin@istidamah.om', password: 'ChangeMe123!', role: 'admin' },
@@ -268,11 +301,12 @@ async function importData() {
 
   const users = {};
   if (!demoAllowed) {
-    console.log('[seed] production: skipping the demo accounts.');
-    console.log('[seed] Their passwords are in this file, so seeding them here');
-    console.log('[seed] would publish an admin login. Create the first admin');
-    console.log('[seed] yourself, or set ALLOW_DEMO_ACCOUNTS=true if this');
-    console.log('[seed] deployment is a throwaway demo.');
+    console.log('[seed] Remote database: skipping the demo accounts.');
+    console.log('[seed] Their passwords are in this file, which is in the');
+    console.log('[seed] repository — seeding them here would publish an admin');
+    console.log('[seed] login. Register through the site and run');
+    console.log('[seed] `npm run make-admin -- you@example.com` instead, or set');
+    console.log('[seed] ALLOW_DEMO_ACCOUNTS=true if this really is a throwaway.');
   }
 
   for (const spec of demoAllowed ? DEMO_USERS : []) {
@@ -333,17 +367,34 @@ async function importData() {
 
   await seedContent();
 
-  console.log('\n[seed] Done. Demo logins:');
-  for (const u of DEMO_USERS) {
-    console.log(`         ${u.role.padEnd(10)} ${u.email.padEnd(24)} ${u.password}`);
+  if (demoAllowed) {
+    console.log('\n[seed] Done. Demo logins:');
+    for (const u of DEMO_USERS) {
+      console.log(`         ${u.role.padEnd(10)} ${u.email.padEnd(24)} ${u.password}`);
+    }
+    console.log('         Change these before deploying anywhere public.\n');
+  } else {
+    console.log('\n[seed] Done. No demo accounts were created.\n');
   }
-  console.log('         Change these before deploying anywhere public.\n');
   await mongoose.connection.close();
   process.exit(0);
 }
 
-if (process.argv.includes('--destroy')) {
-  destroyData();
-} else {
-  importData();
+/*
+  Only when run as a script.
+
+  Requiring this file must never write to a database. It used to seed on
+  import, which meant `require('./seed')` — from a test, or from a tool wanting
+  nothing but the guard below — silently deleted and rewrote every company,
+  evaluation, tender, facility, discount and news post in whatever MONGO_URI
+  happened to point at.
+*/
+if (require.main === module) {
+  if (process.argv.includes('--destroy')) {
+    destroyData();
+  } else {
+    importData();
+  }
 }
+
+module.exports = { demoAccountsAllowed, targetsLocalDatabase };
