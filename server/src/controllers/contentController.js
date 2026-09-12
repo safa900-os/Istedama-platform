@@ -5,11 +5,47 @@ const Evaluation = require('../models/Evaluation');
 
 /* ------------------------------------------------------------------ Tenders */
 
+/**
+ * The tenders this caller is entitled to see.
+ *
+ * Anonymous visitors and suppliers who were not invited see the public ones.
+ * An invited supplier also sees the tenders naming their company; staff see
+ * everything, because they administer it.
+ *
+ * Returned as a query fragment rather than applied by filtering results,
+ * so an invited tender is never fetched and then discarded — the database
+ * never hands the process a record the caller may not read.
+ */
+async function visibilityFilter(user) {
+  if (user && ['admin', 'auditor'].includes(user.role)) return {};
+
+  const base = { visibility: 'public' };
+  if (!user) return base;
+
+  const company = await Company.findOne({ owner: user._id }).select('_id');
+  if (!company) return base;
+
+  return { $or: [base, { visibility: 'invited', invitedCompanies: company._id }] };
+}
+
 const getTenders = asyncHandler(async (req, res) => {
-  const { category, status, limit } = req.query;
-  const query = {};
+  const { category, status, limit, invited } = req.query;
+
+  const query = { ...(await visibilityFilter(req.user)) };
   if (category && category !== 'all') query.category = category;
   if (status) query.status = status;
+
+  /*
+    `?invited=true` narrows to the closed competitions this caller was named
+    in — the supplier's "my invitations" view. It cannot widen anything: the
+    visibility filter above has already decided what is readable.
+  */
+  if (invited === 'true') {
+    const company = req.user ? await Company.findOne({ owner: req.user._id }).select('_id') : null;
+    query.visibility = 'invited';
+    query.invitedCompanies = company ? company._id : null;
+    delete query.$or;
+  }
 
   const tenders = await Tender.find(query)
     .sort({ closingDate: 1 })
@@ -18,7 +54,12 @@ const getTenders = asyncHandler(async (req, res) => {
 });
 
 const getTenderById = asyncHandler(async (req, res) => {
-  const tender = await Tender.findById(req.params.id);
+  // The same rule as the listing, applied to the direct fetch. Guessing an id
+  // must not be a way around an invitation.
+  const tender = await Tender.findOne({
+    _id: req.params.id,
+    ...(await visibilityFilter(req.user))
+  });
   if (!tender) {
     res.status(404);
     throw new Error('Tender not found');

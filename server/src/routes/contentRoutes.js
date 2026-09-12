@@ -1,14 +1,16 @@
 const express = require('express');
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
-const { protect } = require('../middleware/auth');
+const { protect, identify } = require('../middleware/auth');
 const c = require('../controllers/contentController');
 
 const router = express.Router();
 
 /* Public reads */
-router.get('/tenders', c.getTenders);
-router.get('/tenders/:id', c.getTenderById);
+/* `identify` rather than `protect`: these are public, but an invited supplier
+   who is signed in sees more than an anonymous visitor. */
+router.get('/tenders', identify, c.getTenders);
+router.get('/tenders/:id', identify, c.getTenderById);
 router.get('/facilities', c.getFacilities);
 router.get('/discounts', c.getDiscounts);
 router.get('/news', c.getNews);

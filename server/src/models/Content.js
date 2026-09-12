@@ -34,6 +34,33 @@ const tenderSchema = new mongoose.Schema(
     },
     documentsRequired: { type: Boolean, default: false },
 
+    /*
+      Who may bid.
+
+      A public tender is an open call. An invited one is a closed competition
+      between named suppliers — used where the work needs a prequalified
+      capability, or where the buyer is testing the market among firms it has
+      already assessed. The distinction is enforced on every read, not only on
+      the listing: a supplier who guesses the URL of a tender they were not
+      invited to must be refused it, or "invited" means nothing.
+    */
+    visibility: {
+      type: String,
+      enum: ['public', 'invited'],
+      default: 'public',
+      index: true
+    },
+
+    /** The companies invited, when visibility is `invited`. */
+    invitedCompanies: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Company' }],
+
+    /** The institution that published it, when the record has one. */
+    issuedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null },
+
+    /** The winning bid, once the tender is awarded. */
+    awardedBid: { type: mongoose.Schema.Types.ObjectId, ref: 'Application', default: null },
+    awardedAt: { type: Date, default: null },
+
     /* ------------------------------------------------ what a bidder needs
 
       Everything below is what a supplier has to read before they can price

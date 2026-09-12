@@ -1,7 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
-const { protect } = require('../middleware/auth');
+const { protect, authorize } = require('../middleware/auth');
 const Application = require('../models/Application');
 const c = require('../controllers/applicationController');
 
@@ -46,6 +46,13 @@ router.post(
   c.uploadBidDocument
 );
 router.get('/tender/:tenderId/documents/:docId', c.downloadBidDocument);
+
+/* Awarding closes a competition, so it is staff-only. */
+router.post(
+  '/tender/:tenderId/award/:bidId',
+  authorize('admin', 'auditor'),
+  c.awardTender
+);
 router.delete('/tender/:tenderId/documents/:docId', c.deleteBidDocument);
 
 router.get('/', c.listApplications);
