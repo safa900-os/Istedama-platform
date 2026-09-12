@@ -156,6 +156,34 @@ describe('Who may see a tender', () => {
     expect(theirs.body.data).toHaveLength(0);
   });
 
+  test('a tender written before visibility existed is still public', async () => {
+    /*
+      Inserted through the raw collection, so no schema default applies —
+      exactly the state of every tender already on the live database when this
+      field was added. Tender.create would fill in 'public' and hide the bug,
+      which is how it reached production: every test built its tenders fresh.
+    */
+    await Tender.collection.insertOne({
+      refNo: 777,
+      title: 'Written before visibility existed',
+      orgName: 'Legacy Buyer',
+      closingDate: new Date(Date.now() + 7 * 864e5),
+      status: 'open'
+    });
+
+    const anonymous = await request(app).get('/api/content/tenders');
+    const titles = anonymous.body.data.map((t) => t.title);
+    expect(titles).toContain('Written before visibility existed');
+
+    const legacy = await Tender.collection.findOne({ refNo: 777 });
+    const one = await request(app).get(`/api/content/tenders/${legacy._id}`);
+    expect(one.status).toBe(200);
+
+    // and an outsider sees it too — silence means open, not closed
+    const theirs = await as(outsider.token, request(app).get('/api/content/tenders'));
+    expect(theirs.body.data.map((t) => t.title)).toContain('Written before visibility existed');
+  });
+
   test('a stale token degrades to the public view rather than failing the page', async () => {
     const res = await request(app)
       .get('/api/content/tenders')

@@ -19,7 +19,16 @@ const Evaluation = require('../models/Evaluation');
 async function visibilityFilter(user) {
   if (user && ['admin', 'auditor'].includes(user.role)) return {};
 
-  const base = { visibility: 'public' };
+  /*
+    "Not invited", rather than "public".
+
+    Every tender created before `visibility` existed has no such field at all,
+    and a schema default is applied when a document is created, never when it
+    is queried — so `{ visibility: 'public' }` matched none of them. Deploying
+    this filter as first written took every existing tender off the live site
+    at once. A tender is closed only when it says so; silence means open.
+  */
+  const base = { visibility: { $ne: 'invited' } };
   if (!user) return base;
 
   const company = await Company.findOne({ owner: user._id }).select('_id');

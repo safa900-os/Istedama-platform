@@ -5,13 +5,14 @@
  * Run via `npm run seed` (the main seed script calls this) or directly.
  */
 const { Tender, Facility, Discount, NewsPost } = require('./models/Content');
+const { withTerms } = require('./data/tenderTerms');
 
 // Relative dates so seeded tenders never look already-expired when the
 // project is opened weeks after the data was written.
 const daysFromNow = (n) => new Date(Date.now() + n * 864e5);
 const daysAgo = (n) => new Date(Date.now() - n * 864e5);
 
-const tenders = [
+const tenderHeadlines = [
   {
     refNo: 12, category: 'maintenance', status: 'open', documentsRequired: false,
     title: 'Maintenance and upgrade of technical systems for a small enterprise',
@@ -168,6 +169,12 @@ const tenders = [
     closingDate: daysAgo(12)
   },
 ];
+
+/*
+  Each headline joined to the terms a bidder prices against — scoring, phases,
+  conditions and the bill of quantities — which live in data/tenderTerms.js.
+*/
+const tenders = tenderHeadlines.map(withTerms);
 
 /*
  * Rates, capacities, names and descriptions are transcribed from the
