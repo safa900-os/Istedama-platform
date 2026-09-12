@@ -56,16 +56,25 @@ const BOTH = [MERCHANT, ORGANIZATION];
 */
 const ALL = [MERCHANT, ORGANIZATION, FREELANCE];
 
+/*
+  `expires: true` marks the documents that go out of date — a commercial
+  registration, a chamber membership, a Riyada card, a self-employment permit.
+  A logo does not expire; an undertaking is signed once. Marking only the ones
+  that do means the form asks for a date exactly where a date exists, instead
+  of asking for one everywhere and teaching people to leave it blank.
+*/
 const DOCUMENT_SLOTS = {
   cr: {
     entityTypes: BOTH,
     required: true,
+    expires: true,
     accept: ['pdf'],
     label: { en: 'Commercial Registration', ar: 'السجل التجاري' }
   },
   chamber: {
     entityTypes: [MERCHANT],
     required: true,
+    expires: true,
     accept: ['pdf'],
     label: {
       en: 'Chamber of Commerce membership',
@@ -76,18 +85,21 @@ const DOCUMENT_SLOTS = {
     // Riyada backs self-employed practitioners as well as small firms.
     entityTypes: [MERCHANT, FREELANCE],
     required: false,
+    expires: true,
     accept: ['pdf', 'jpg', 'png'],
     label: { en: 'Riyada card', ar: 'بطاقة ريادة' }
   },
   freelancePermit: {
     entityTypes: [FREELANCE],
     required: true,
+    expires: true,
     accept: ['pdf', 'jpg', 'png'],
     label: { en: 'Self-employment permit', ar: 'سجل العمل الحر' }
   },
   ecommerceLicence: {
     entityTypes: [FREELANCE],
     required: false,
+    expires: true,
     accept: ['pdf', 'jpg', 'png'],
     label: {
       en: 'E-commerce licence',
@@ -170,7 +182,13 @@ const magicMatches = (type, buffer) => {
   );
 };
 
+/** Slots whose documents carry an expiry date. */
+const EXPIRING_SLOTS = Object.freeze(
+  Object.keys(DOCUMENT_SLOTS).filter((k) => DOCUMENT_SLOTS[k].expires)
+);
+
 module.exports = {
+  EXPIRING_SLOTS,
   FILE_TYPES,
   DOCUMENT_SLOTS,
   SLOT_KEYS,

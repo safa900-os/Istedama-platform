@@ -33,7 +33,14 @@ const documentSchema = new mongoose.Schema(
     mimeType: { type: String, required: true },
     size: { type: Number, required: true, min: 1 },
     uploadedAt: { type: Date, default: Date.now },
-    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+    /*
+      When this document stops being valid. Null for the ones that never do —
+      a logo, a signed undertaking — and for records uploaded before the field
+      existed, which is why nothing treats null as "expired".
+    */
+    expiryDate: { type: Date, default: null }
   },
   { _id: true }
 );
@@ -484,6 +491,40 @@ companySchema.pre('validate', function stampRegistration(next) {
     }
   }
   next();
+});
+
+/*
+  Documents that have gone out of date, and those about to.
+
+  A reviewer approving a registration needs this in front of them: approving a
+  company whose commercial registration expired last month admits an entity
+  that, on paper, no longer trades. Computed rather than stored, because
+  "expired" is a fact about today and a stored flag would be wrong by morning.
+*/
+const EXPIRY_WARNING_DAYS = 30;
+
+companySchema.virtual('expiredDocuments').get(function () {
+  const now = Date.now();
+  return (this.documents || [])
+    .filter((d) => d.expiryDate && new Date(d.expiryDate).getTime() < now)
+    .map((d) => ({ slot: d.slot, originalName: d.originalName, expiryDate: d.expiryDate }));
+});
+
+companySchema.virtual('expiringDocuments').get(function () {
+  const now = Date.now();
+  const horizon = now + EXPIRY_WARNING_DAYS * 864e5;
+  return (this.documents || [])
+    .filter((d) => {
+      if (!d.expiryDate) return false;
+      const at = new Date(d.expiryDate).getTime();
+      return at >= now && at <= horizon;
+    })
+    .map((d) => ({ slot: d.slot, originalName: d.originalName, expiryDate: d.expiryDate }));
+});
+
+/** True when nothing on file has lapsed — what a reviewer checks first. */
+companySchema.virtual('documentsCurrent').get(function () {
+  return this.expiredDocuments.length === 0;
 });
 
 companySchema.set('toJSON', { virtuals: true });

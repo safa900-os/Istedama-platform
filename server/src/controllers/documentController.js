@@ -61,12 +61,25 @@ const assertCanWrite = (company, user, res) => {
 // @desc  Document slots that apply to a registration type
 // @route GET /api/companies/documents/catalogue?entityType=merchant
 const getCatalogue = asyncHandler(async (req, res) => {
-  const entityType = req.query.entityType === 'merchant' ? 'merchant' : 'organization';
+  /*
+    Three registration types, not two. This read `=== 'merchant' ? merchant :
+    organization`, which quietly served a self-employed applicant the
+    institution's catalogue — so the form asked a permit holder for documents
+    that do not apply to them and never asked for the permit.
+  */
+  const ENTITY_TYPES = ['merchant', 'organization', 'freelance'];
+  const entityType = ENTITY_TYPES.includes(req.query.entityType)
+    ? req.query.entityType
+    : 'organization';
+
   const slots = slotsFor(entityType).map((key) => ({
     slot: key,
     label: DOCUMENT_SLOTS[key].label,
     required: DOCUMENT_SLOTS[key].required,
-    accept: DOCUMENT_SLOTS[key].accept
+    accept: DOCUMENT_SLOTS[key].accept,
+    // Whether this document carries an expiry date, so the form asks for one
+    // only where one exists.
+    expires: Boolean(DOCUMENT_SLOTS[key].expires)
   }));
   res.json({ success: true, data: { entityType, slots, maxBytes: MAX_BYTES } });
 });
