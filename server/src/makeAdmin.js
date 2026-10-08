@@ -8,6 +8,7 @@
  *
  * Usage:
  *   npm run make-admin -- someone@example.com
+ *   npm run make-admin -- someone@example.com admin --activate
  *
  * It never creates an account and never sets a password — it only changes the
  * role of somebody who has already signed up, so there is no way for it to
@@ -20,11 +21,16 @@ const User = require('./models/User');
 const VALID = ['admin', 'auditor', 'sme_owner', 'merchant', 'freelancer'];
 
 (async () => {
-  const email = (process.argv[2] || '').trim().toLowerCase();
-  const role = (process.argv[3] || 'admin').trim();
+  // Flags are filtered out so `-- me@example.om --activate` still reads the
+  // role from its own position rather than taking the flag as one.
+  const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+  const activate = process.argv.includes('--activate');
+
+  const email = (args[0] || '').trim().toLowerCase();
+  const role = (args[1] || 'admin').trim();
 
   if (!email) {
-    console.error('Usage: npm run make-admin -- someone@example.com [role]');
+    console.error('Usage: npm run make-admin -- someone@example.com [role] [--activate]');
     console.error('Roles:', VALID.join(', '));
     process.exit(1);
   }
@@ -51,9 +57,31 @@ const VALID = ['admin', 'auditor', 'sme_owner', 'merchant', 'freelancer'];
 
   const was = user.role;
   user.role = role;
+
+  /*
+    A deactivated account is refused at sign-in and again by `protect` on every
+    request, so promoting one produces an administrator who cannot administer
+    anything — and the only clue is a login that keeps failing for no stated
+    reason. Reactivating is a separate decision from appointing, though, so it
+    is asked for separately rather than done quietly.
+  */
+  const wasInactive = user.active === false;
+  if (wasInactive && activate) user.active = true;
+
   await user.save();
 
   console.log(`${user.name || email}: ${was} -> ${role}`);
+
+  if (wasInactive && activate) {
+    console.log('Account reactivated.');
+  } else if (wasInactive) {
+    console.warn('');
+    console.warn('WARNING: this account is deactivated, so it cannot sign in —');
+    console.warn('the new role will not take effect until it is active again.');
+    console.warn('Run this with --activate to reactivate it at the same time:');
+    console.warn(`  npm run make-admin -- ${email} ${role} --activate`);
+  }
+
   await mongoose.disconnect();
 })().catch(async (err) => {
   console.error('Failed:', err.message);

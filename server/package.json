@@ -11,7 +11,8 @@
     "seed:destroy": "node src/seed.js --destroy",
     "test": "jest --runInBand --forceExit",
     "make-admin": "node src/makeAdmin.js",
-    "seed:tenders": "node src/seedExampleTenders.js"
+    "seed:tenders": "node src/seedExampleTenders.js",
+    "demo:purge": "node src/purgeDemoAccounts.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
